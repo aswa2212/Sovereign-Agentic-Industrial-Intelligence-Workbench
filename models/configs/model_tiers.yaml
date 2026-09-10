@@ -1,0 +1,65 @@
+# SIH26117 — Model Tier Configuration
+# Controls local model selection and concurrency strategy based on available hardware.
+
+active_tier: dev # Options: 'dev' | 'target'
+
+tiers:
+  dev:
+    description: "Laptop Development Profile (RTX 4060, 8 GB VRAM, 16 GB RAM)"
+    vram_budget_gb: 8.0
+    max_concurrent_models: 1 # Serial model swapping; unload idle model before loading next
+    swap_keep_alive: "0m" # Unload immediately from VRAM after execution
+    router:
+      provider: "ollama"
+      model_tag: "qwen2.5:1.5b"
+      context_window: 4096
+      quantization: "Q4_K_M"
+    reasoning:
+      provider: "ollama"
+      model_tag: "deepseek-r1:7b"
+      context_window: 8192
+      quantization: "Q4_K_M"
+    coder:
+      provider: "ollama"
+      model_tag: "qwen2.5-coder:3b"
+      context_window: 8192
+      quantization: "Q4_K_M"
+    vision:
+      provider: "ollama"
+      model_tag: "qwen2.5-vl:3b"
+      context_window: 4096
+      quantization: "Q4_K_M"
+    embedding:
+      provider: "local"
+      model_tag: "nomic-embed-text"
+      device: "cpu" # Free up GPU VRAM entirely for generation
+
+  target:
+    description: "Demonstrator / Lab Workstation Profile (24-48 GB VRAM)"
+    vram_budget_gb: 24.0
+    max_concurrent_models: 3 # Quantized colocation with PagedAttention
+    swap_keep_alive: "60m"
+    router:
+      provider: "ollama"
+      model_tag: "deepseek-r1-distill-llama:8b"
+      context_window: 8192
+      quantization: "Q4_K_M"
+    reasoning:
+      provider: "ollama"
+      model_tag: "deepseek-r1-distill-qwen:14b"
+      context_window: 16384
+      quantization: "AWQ"
+    coder:
+      provider: "ollama"
+      model_tag: "qwen2.5-coder:14b"
+      context_window: 16384
+      quantization: "AWQ"
+    vision:
+      provider: "ollama"
+      model_tag: "qwen2.5-vl:7b"
+      context_window: 8192
+      quantization: "AWQ"
+    embedding:
+      provider: "local"
+      model_tag: "bge-base-en-v1.5"
+      device: "cuda"

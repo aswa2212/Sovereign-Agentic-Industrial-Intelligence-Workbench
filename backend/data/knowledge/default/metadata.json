@@ -1,0 +1,494 @@
+[
+  {
+    "chunk_id": "a1b2c3d4e5f6_p1_c0000",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 1,
+    "section_index": null,
+    "section_header": "Page 1",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 1 | Page 1]\n\nMANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\nSTANDARD OPERATING PROCEDURE: PIPING INTEGRITY INSPECTION\nDOCUMENT CODE: SOP-MRPL-PIP-001 | REVISION: 04\n\n1.0 PURPOSE AND SCOPE\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nThis standard operating procedure establishes inspection guidelines, non-destructive ultrasonic thickness gauging (UTG) frequencies, and retirement thresholds for crude distillation, secondary processing, and utility piping networks across MRPL Phase I and Phase II units.",
+    "content_sha256": "68561842b792ddbcf3a539fe893aa3c0be7840544a41c7dfd2f976eacc4f9cbd",
+    "token_count": 123,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 1,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p2_c0001",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 2,
+    "section_index": null,
+    "section_header": "Page 2",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 2 | Page 2]\n\n2.0 RESPONSIBILITIES AND ROLES\nThe Inspection Division Lead Engineer shall ensure all ultrasonic thickness measurements comply with API 570 and ASME B31.3 standards. Corrosion monitoring locations (CML) must be permanently marked on piping spools.",
+    "content_sha256": "e884e32f3ecaf64018b667f788a811a632fb9cf675b20d70c2ed65c39e463dc1",
+    "token_count": 67,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 2,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0002",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 | Page 3]\n\n4.0 ACCEPTANCE CRITERIA AND RETIREMENT THICKNESS\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nSection 4.2 Minimum Allowable Wall Thickness Requirements:\nFor Class 150 carbon steel process piping (ASTM A106 Grade B), the minimum allowable retired wall thickness shall not be less than 3.2 mm under any operating condition, regardless of calculated structural pressure requirements. Any ultrasonic thickness gauging reading below 3.2 mm mandates immediate non-conformance reporting, isolation tagging, and notification to the Head of Asset Integrity.",
+    "content_sha256": "ac77868fc2f81ccb05680f690e2420bae39633ae3c8e42aa3974f09bd801cfbf",
+    "token_count": 135,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0003",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3 Table",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 Table | Page 3 (Structured Table)]\n\n| Nominal Pipe Size (NPS) | Pipe Rating / Class | Material Spec | Nominal Wall (mm) | Minimum Retirement Wall (mm) |\n| --- | --- | --- | --- | --- |\n| 2 inch | Class 150 | ASTM A106 Gr. B | 3.91 | 3.20 |\n| 4 inch | Class 150 | ASTM A106 Gr. B | 6.02 | 3.20 |\n| 6 inch | Class 150 | ASTM A106 Gr. B | 7.11 | 3.20 |\n| 8 inch | Class 150 | ASTM A106 Gr. B | 8.18 | 3.20 |\n| 10 inch | Class 150 | ASTM A106 Gr. B | 9.27 | 3.20 |",
+    "content_sha256": "7a1913b8ff18f22697ffe533149ec3b69fcdbd59547ce298a62a963db9a28499",
+    "token_count": 203,
+    "chunk_type": "table",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "table",
+      "table_id": "tbl_sop_thickness_specs_p3",
+      "row_count": 5
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p1_c0000",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 1,
+    "section_index": null,
+    "section_header": "Page 1",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 1 | Page 1]\n\nMANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\nSTANDARD OPERATING PROCEDURE: PIPING INTEGRITY INSPECTION\nDOCUMENT CODE: SOP-MRPL-PIP-001 | REVISION: 04\n\n1.0 PURPOSE AND SCOPE\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nThis standard operating procedure establishes inspection guidelines, non-destructive ultrasonic thickness gauging (UTG) frequencies, and retirement thresholds for crude distillation, secondary processing, and utility piping networks across MRPL Phase I and Phase II units.",
+    "content_sha256": "68561842b792ddbcf3a539fe893aa3c0be7840544a41c7dfd2f976eacc4f9cbd",
+    "token_count": 123,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 1,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p2_c0001",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 2,
+    "section_index": null,
+    "section_header": "Page 2",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 2 | Page 2]\n\n2.0 RESPONSIBILITIES AND ROLES\nThe Inspection Division Lead Engineer shall ensure all ultrasonic thickness measurements comply with API 570 and ASME B31.3 standards. Corrosion monitoring locations (CML) must be permanently marked on piping spools.",
+    "content_sha256": "e884e32f3ecaf64018b667f788a811a632fb9cf675b20d70c2ed65c39e463dc1",
+    "token_count": 67,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 2,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0002",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 | Page 3]\n\n4.0 ACCEPTANCE CRITERIA AND RETIREMENT THICKNESS\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nSection 4.2 Minimum Allowable Wall Thickness Requirements:\nFor Class 150 carbon steel process piping (ASTM A106 Grade B), the minimum allowable retired wall thickness shall not be less than 3.2 mm under any operating condition, regardless of calculated structural pressure requirements. Any ultrasonic thickness gauging reading below 3.2 mm mandates immediate non-conformance reporting, isolation tagging, and notification to the Head of Asset Integrity.",
+    "content_sha256": "ac77868fc2f81ccb05680f690e2420bae39633ae3c8e42aa3974f09bd801cfbf",
+    "token_count": 135,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0003",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3 Table",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 Table | Page 3 (Structured Table)]\n\n| Nominal Pipe Size (NPS) | Pipe Rating / Class | Material Spec | Nominal Wall (mm) | Minimum Retirement Wall (mm) |\n| --- | --- | --- | --- | --- |\n| 2 inch | Class 150 | ASTM A106 Gr. B | 3.91 | 3.20 |\n| 4 inch | Class 150 | ASTM A106 Gr. B | 6.02 | 3.20 |\n| 6 inch | Class 150 | ASTM A106 Gr. B | 7.11 | 3.20 |\n| 8 inch | Class 150 | ASTM A106 Gr. B | 8.18 | 3.20 |\n| 10 inch | Class 150 | ASTM A106 Gr. B | 9.27 | 3.20 |",
+    "content_sha256": "7a1913b8ff18f22697ffe533149ec3b69fcdbd59547ce298a62a963db9a28499",
+    "token_count": 203,
+    "chunk_type": "table",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "table",
+      "table_id": "tbl_sop_thickness_specs_p3",
+      "row_count": 5
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p1_c0000",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 1,
+    "section_index": null,
+    "section_header": "Page 1",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 1 | Page 1]\n\nMANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\nSTANDARD OPERATING PROCEDURE: PIPING INTEGRITY INSPECTION\nDOCUMENT CODE: SOP-MRPL-PIP-001 | REVISION: 04\n\n1.0 PURPOSE AND SCOPE\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nThis standard operating procedure establishes inspection guidelines, non-destructive ultrasonic thickness gauging (UTG) frequencies, and retirement thresholds for crude distillation, secondary processing, and utility piping networks across MRPL Phase I and Phase II units.",
+    "content_sha256": "68561842b792ddbcf3a539fe893aa3c0be7840544a41c7dfd2f976eacc4f9cbd",
+    "token_count": 123,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 1,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p2_c0001",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 2,
+    "section_index": null,
+    "section_header": "Page 2",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 2 | Page 2]\n\n2.0 RESPONSIBILITIES AND ROLES\nThe Inspection Division Lead Engineer shall ensure all ultrasonic thickness measurements comply with API 570 and ASME B31.3 standards. Corrosion monitoring locations (CML) must be permanently marked on piping spools.",
+    "content_sha256": "e884e32f3ecaf64018b667f788a811a632fb9cf675b20d70c2ed65c39e463dc1",
+    "token_count": 67,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 2,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0002",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 | Page 3]\n\n4.0 ACCEPTANCE CRITERIA AND RETIREMENT THICKNESS\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nSection 4.2 Minimum Allowable Wall Thickness Requirements:\nFor Class 150 carbon steel process piping (ASTM A106 Grade B), the minimum allowable retired wall thickness shall not be less than 3.2 mm under any operating condition, regardless of calculated structural pressure requirements. Any ultrasonic thickness gauging reading below 3.2 mm mandates immediate non-conformance reporting, isolation tagging, and notification to the Head of Asset Integrity.",
+    "content_sha256": "ac77868fc2f81ccb05680f690e2420bae39633ae3c8e42aa3974f09bd801cfbf",
+    "token_count": 135,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0003",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3 Table",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 Table | Page 3 (Structured Table)]\n\n| Nominal Pipe Size (NPS) | Pipe Rating / Class | Material Spec | Nominal Wall (mm) | Minimum Retirement Wall (mm) |\n| --- | --- | --- | --- | --- |\n| 2 inch | Class 150 | ASTM A106 Gr. B | 3.91 | 3.20 |\n| 4 inch | Class 150 | ASTM A106 Gr. B | 6.02 | 3.20 |\n| 6 inch | Class 150 | ASTM A106 Gr. B | 7.11 | 3.20 |\n| 8 inch | Class 150 | ASTM A106 Gr. B | 8.18 | 3.20 |\n| 10 inch | Class 150 | ASTM A106 Gr. B | 9.27 | 3.20 |",
+    "content_sha256": "7a1913b8ff18f22697ffe533149ec3b69fcdbd59547ce298a62a963db9a28499",
+    "token_count": 203,
+    "chunk_type": "table",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "table",
+      "table_id": "tbl_sop_thickness_specs_p3",
+      "row_count": 5
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p1_c0000",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 1,
+    "section_index": null,
+    "section_header": "Page 1",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 1 | Page 1]\n\nMANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\nSTANDARD OPERATING PROCEDURE: PIPING INTEGRITY INSPECTION\nDOCUMENT CODE: SOP-MRPL-PIP-001 | REVISION: 04\n\n1.0 PURPOSE AND SCOPE\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nThis standard operating procedure establishes inspection guidelines, non-destructive ultrasonic thickness gauging (UTG) frequencies, and retirement thresholds for crude distillation, secondary processing, and utility piping networks across MRPL Phase I and Phase II units.",
+    "content_sha256": "68561842b792ddbcf3a539fe893aa3c0be7840544a41c7dfd2f976eacc4f9cbd",
+    "token_count": 123,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 1,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p2_c0001",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 2,
+    "section_index": null,
+    "section_header": "Page 2",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 2 | Page 2]\n\n2.0 RESPONSIBILITIES AND ROLES\nThe Inspection Division Lead Engineer shall ensure all ultrasonic thickness measurements comply with API 570 and ASME B31.3 standards. Corrosion monitoring locations (CML) must be permanently marked on piping spools.",
+    "content_sha256": "e884e32f3ecaf64018b667f788a811a632fb9cf675b20d70c2ed65c39e463dc1",
+    "token_count": 67,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 2,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0002",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 | Page 3]\n\n4.0 ACCEPTANCE CRITERIA AND RETIREMENT THICKNESS\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nSection 4.2 Minimum Allowable Wall Thickness Requirements:\nFor Class 150 carbon steel process piping (ASTM A106 Grade B), the minimum allowable retired wall thickness shall not be less than 3.2 mm under any operating condition, regardless of calculated structural pressure requirements. Any ultrasonic thickness gauging reading below 3.2 mm mandates immediate non-conformance reporting, isolation tagging, and notification to the Head of Asset Integrity.",
+    "content_sha256": "ac77868fc2f81ccb05680f690e2420bae39633ae3c8e42aa3974f09bd801cfbf",
+    "token_count": 135,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0003",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3 Table",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 Table | Page 3 (Structured Table)]\n\n| Nominal Pipe Size (NPS) | Pipe Rating / Class | Material Spec | Nominal Wall (mm) | Minimum Retirement Wall (mm) |\n| --- | --- | --- | --- | --- |\n| 2 inch | Class 150 | ASTM A106 Gr. B | 3.91 | 3.20 |\n| 4 inch | Class 150 | ASTM A106 Gr. B | 6.02 | 3.20 |\n| 6 inch | Class 150 | ASTM A106 Gr. B | 7.11 | 3.20 |\n| 8 inch | Class 150 | ASTM A106 Gr. B | 8.18 | 3.20 |\n| 10 inch | Class 150 | ASTM A106 Gr. B | 9.27 | 3.20 |",
+    "content_sha256": "7a1913b8ff18f22697ffe533149ec3b69fcdbd59547ce298a62a963db9a28499",
+    "token_count": 203,
+    "chunk_type": "table",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "table",
+      "table_id": "tbl_sop_thickness_specs_p3",
+      "row_count": 5
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p1_c0000",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 1,
+    "section_index": null,
+    "section_header": "Page 1",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 1 | Page 1]\n\nMANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\nSTANDARD OPERATING PROCEDURE: PIPING INTEGRITY INSPECTION\nDOCUMENT CODE: SOP-MRPL-PIP-001 | REVISION: 04\n\n1.0 PURPOSE AND SCOPE\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nThis standard operating procedure establishes inspection guidelines, non-destructive ultrasonic thickness gauging (UTG) frequencies, and retirement thresholds for crude distillation, secondary processing, and utility piping networks across MRPL Phase I and Phase II units.",
+    "content_sha256": "68561842b792ddbcf3a539fe893aa3c0be7840544a41c7dfd2f976eacc4f9cbd",
+    "token_count": 123,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 1,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p2_c0001",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 2,
+    "section_index": null,
+    "section_header": "Page 2",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 2 | Page 2]\n\n2.0 RESPONSIBILITIES AND ROLES\nThe Inspection Division Lead Engineer shall ensure all ultrasonic thickness measurements comply with API 570 and ASME B31.3 standards. Corrosion monitoring locations (CML) must be permanently marked on piping spools.",
+    "content_sha256": "e884e32f3ecaf64018b667f788a811a632fb9cf675b20d70c2ed65c39e463dc1",
+    "token_count": 67,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 2,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0002",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 | Page 3]\n\n4.0 ACCEPTANCE CRITERIA AND RETIREMENT THICKNESS\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nSection 4.2 Minimum Allowable Wall Thickness Requirements:\nFor Class 150 carbon steel process piping (ASTM A106 Grade B), the minimum allowable retired wall thickness shall not be less than 3.2 mm under any operating condition, regardless of calculated structural pressure requirements. Any ultrasonic thickness gauging reading below 3.2 mm mandates immediate non-conformance reporting, isolation tagging, and notification to the Head of Asset Integrity.",
+    "content_sha256": "ac77868fc2f81ccb05680f690e2420bae39633ae3c8e42aa3974f09bd801cfbf",
+    "token_count": 135,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0003",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3 Table",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 Table | Page 3 (Structured Table)]\n\n| Nominal Pipe Size (NPS) | Pipe Rating / Class | Material Spec | Nominal Wall (mm) | Minimum Retirement Wall (mm) |\n| --- | --- | --- | --- | --- |\n| 2 inch | Class 150 | ASTM A106 Gr. B | 3.91 | 3.20 |\n| 4 inch | Class 150 | ASTM A106 Gr. B | 6.02 | 3.20 |\n| 6 inch | Class 150 | ASTM A106 Gr. B | 7.11 | 3.20 |\n| 8 inch | Class 150 | ASTM A106 Gr. B | 8.18 | 3.20 |\n| 10 inch | Class 150 | ASTM A106 Gr. B | 9.27 | 3.20 |",
+    "content_sha256": "7a1913b8ff18f22697ffe533149ec3b69fcdbd59547ce298a62a963db9a28499",
+    "token_count": 203,
+    "chunk_type": "table",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "table",
+      "table_id": "tbl_sop_thickness_specs_p3",
+      "row_count": 5
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p1_c0000",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 1,
+    "section_index": null,
+    "section_header": "Page 1",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 1 | Page 1]\n\nMANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\nSTANDARD OPERATING PROCEDURE: PIPING INTEGRITY INSPECTION\nDOCUMENT CODE: SOP-MRPL-PIP-001 | REVISION: 04\n\n1.0 PURPOSE AND SCOPE\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nThis standard operating procedure establishes inspection guidelines, non-destructive ultrasonic thickness gauging (UTG) frequencies, and retirement thresholds for crude distillation, secondary processing, and utility piping networks across MRPL Phase I and Phase II units.",
+    "content_sha256": "68561842b792ddbcf3a539fe893aa3c0be7840544a41c7dfd2f976eacc4f9cbd",
+    "token_count": 123,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 1,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p2_c0001",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 2,
+    "section_index": null,
+    "section_header": "Page 2",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 2 | Page 2]\n\n2.0 RESPONSIBILITIES AND ROLES\nThe Inspection Division Lead Engineer shall ensure all ultrasonic thickness measurements comply with API 570 and ASME B31.3 standards. Corrosion monitoring locations (CML) must be permanently marked on piping spools.",
+    "content_sha256": "e884e32f3ecaf64018b667f788a811a632fb9cf675b20d70c2ed65c39e463dc1",
+    "token_count": 67,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 2,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0002",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 | Page 3]\n\n4.0 ACCEPTANCE CRITERIA AND RETIREMENT THICKNESS\n[SYNTHETIC TEST DATA FOR SIH26117 VERIFICATION - NOT REAL MRPL POLICY]\nSection 4.2 Minimum Allowable Wall Thickness Requirements:\nFor Class 150 carbon steel process piping (ASTM A106 Grade B), the minimum allowable retired wall thickness shall not be less than 3.2 mm under any operating condition, regardless of calculated structural pressure requirements. Any ultrasonic thickness gauging reading below 3.2 mm mandates immediate non-conformance reporting, isolation tagging, and notification to the Head of Asset Integrity.",
+    "content_sha256": "ac77868fc2f81ccb05680f690e2420bae39633ae3c8e42aa3974f09bd801cfbf",
+    "token_count": 135,
+    "chunk_type": "text",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "text"
+    }
+  },
+  {
+    "chunk_id": "a1b2c3d4e5f6_p3_c0003",
+    "document_id": "synthetic-sop-mrpl-piping-001",
+    "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+    "source_document": "SOP-MRPL-PIP-001.pdf",
+    "page_number": 3,
+    "section_index": null,
+    "section_header": "Page 3 Table",
+    "text": "[SOP-MRPL-PIP-001.pdf | Page 3 Table | Page 3 (Structured Table)]\n\n| Nominal Pipe Size (NPS) | Pipe Rating / Class | Material Spec | Nominal Wall (mm) | Minimum Retirement Wall (mm) |\n| --- | --- | --- | --- | --- |\n| 2 inch | Class 150 | ASTM A106 Gr. B | 3.91 | 3.20 |\n| 4 inch | Class 150 | ASTM A106 Gr. B | 6.02 | 3.20 |\n| 6 inch | Class 150 | ASTM A106 Gr. B | 7.11 | 3.20 |\n| 8 inch | Class 150 | ASTM A106 Gr. B | 8.18 | 3.20 |\n| 10 inch | Class 150 | ASTM A106 Gr. B | 9.27 | 3.20 |",
+    "content_sha256": "7a1913b8ff18f22697ffe533149ec3b69fcdbd59547ce298a62a963db9a28499",
+    "token_count": 203,
+    "chunk_type": "table",
+    "metadata": {
+      "source_document": "SOP-MRPL-PIP-001.pdf",
+      "source_sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
+      "page_number": 3,
+      "section_index": null,
+      "chunk_type": "table",
+      "table_id": "tbl_sop_thickness_specs_p3",
+      "row_count": 5
+    }
+  }
+]

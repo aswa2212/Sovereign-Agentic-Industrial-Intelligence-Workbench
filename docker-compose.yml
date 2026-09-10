@@ -1,0 +1,49 @@
+# ==============================================================================
+# SIH26117 — Sovereign On-Premise Agentic AI Workbench Docker Composition
+# NOTE: This is a configuration placeholder for air-gapped staging.
+# DO NOT start Docker services during initial local development.
+# ==============================================================================
+
+version: "3.8"
+
+networks:
+  # Strict sovereign internal network: internal=true prevents external WAN routing
+  sovereign_internal_net:
+    driver: bridge
+    internal: true
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: sih26117_backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - APP_ENV=production
+      - HARDWARE_TIER=dev
+      - AIR_GAP_STRICT_MODE=True
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+    networks:
+      - sovereign_internal_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: sih26117_frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+    networks:
+      - sovereign_internal_net
+    depends_on:
+      - backend
