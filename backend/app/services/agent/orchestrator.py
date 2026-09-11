@@ -67,6 +67,7 @@ class AgentStateMachineOrchestrator:
         reflector: Optional[Reflector] = None,
         validator: Optional[Validator] = None,
         structured_output_service: Optional[_StructuredOutputService] = None,
+        audit_service: Optional[Any] = None,
     ) -> None:
         settings = get_settings()
         self.router = router or RuleRouter()
@@ -76,12 +77,46 @@ class AgentStateMachineOrchestrator:
         self.validator = validator or Validator()
         # Phase 9: optional structured output service (Agent → Service, never reverse)
         self._structured_output_service = structured_output_service or _StructuredOutputService()
+        # Phase 11: optional audit service for recording lifecycle evidence
+        self.audit_service = audit_service
 
         self.step_timeout = settings.agent_step_timeout_seconds
         self.global_timeout = settings.agent_global_timeout_seconds
 
         # In-memory store of executed tasks
         self._tasks: Dict[str, AgentContext] = {}
+
+    def _record_audit(
+        self,
+        event_type: str,
+        action: str,
+        task_id: Optional[str] = None,
+        agent_state: Optional[str] = None,
+        model_role: Optional[str] = None,
+        capability: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        status: str = "SUCCESS",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Safely record an audit event if audit_service is configured."""
+        if not self.audit_service:
+            return
+        try:
+            from app.services.audit.models import AuditEventType
+            ev_type = AuditEventType(event_type) if isinstance(event_type, str) else event_type
+            self.audit_service.record_event(
+                event_type=ev_type,
+                action=action,
+                task_id=task_id,
+                agent_state=agent_state,
+                model_role=model_role,
+                capability=capability,
+                tool_name=tool_name,
+                status=status,
+                metadata=metadata or {},
+            )
+        except Exception as audit_err:
+            logger.warning("Agent audit logging skipped: %s", audit_err)
 
     def get_task_context(self, task_id: str) -> Optional[AgentContext]:
         """Retrieve stored task execution context."""
@@ -114,6 +149,12 @@ class AgentStateMachineOrchestrator:
             AgentStateMachine.transition(
                 context, AgentState.RECEIVE, message=f"Received task: {task[:80]}"
             )
+            self._record_audit(
+                "TASK_STARTED",
+                action=f"Received task: {task[:80]}",
+                task_id=context.task_id,
+                agent_state="RECEIVE",
+            )
 
             # ── 2. UNDERSTAND (Call Phase 3 Task Router) ──────────────────────
             AgentStateMachine.transition(
@@ -122,6 +163,15 @@ class AgentStateMachineOrchestrator:
             context.routing_decision = self.router.route(
                 task=context.user_request,
                 request_id=context.task_id,
+            )
+            self._record_audit(
+                "MODEL_ROUTED",
+                action=f"Routing intent: {context.routing_decision.task_type.value}",
+                task_id=context.task_id,
+                agent_state="UNDERSTAND",
+                model_role=context.routing_decision.model_role.value,
+                capability=context.routing_decision.capability.value,
+                metadata={"confidence": context.routing_decision.confidence},
             )
 
             # ── 3. PLAN ───────────────────────────────────────────────────────
@@ -133,6 +183,13 @@ class AgentStateMachineOrchestrator:
                 task=context.user_request,
                 task_id=context.task_id,
                 routing_decision=context.routing_decision,
+            )
+            self._record_audit(
+                "PLAN_CREATED",
+                action=f"Plan generated with {len(context.plan.steps)} step(s)",
+                task_id=context.task_id,
+                agent_state="PLAN",
+                metadata={"step_count": len(context.plan.steps)},
             )
 
             if not context.plan.steps:
@@ -159,6 +216,15 @@ class AgentStateMachineOrchestrator:
                         AgentState.EXECUTE,
                         message=f"Executing {step.id}: {step.description}",
                         metadata={"capability": step.capability, "tool": step.tool_name},
+                    )
+                    self._record_audit(
+                        "TOOL_STARTED",
+                        action=f"Invoking {step.tool_name}",
+                        task_id=context.task_id,
+                        agent_state="EXECUTE",
+                        tool_name=step.tool_name,
+                        capability=step.capability,
+                        metadata={"step_id": step.id},
                     )
 
                     tool = self.tool_registry.get_tool(step.tool_name)
@@ -210,6 +276,16 @@ class AgentStateMachineOrchestrator:
                             )
 
                     context.observations.append(obs)
+                    self._record_audit(
+                        "TOOL_COMPLETED",
+                        action=f"Completed {step.tool_name}",
+                        task_id=context.task_id,
+                        agent_state="OBSERVE",
+                        tool_name=step.tool_name,
+                        capability=step.capability,
+                        status="SUCCESS" if obs.success else "FAILED",
+                        metadata={"step_id": step.id, "success": obs.success, "error": obs.error},
+                    )
 
                     # OBSERVE state
                     AgentStateMachine.transition(
@@ -235,6 +311,14 @@ class AgentStateMachineOrchestrator:
                             AgentState.FAILED,
                             message=f"Aborted during reflection: {reflection.reason}",
                         )
+                        self._record_audit(
+                            "TASK_FAILED",
+                            action=f"Aborted during reflection: {reflection.reason}",
+                            task_id=context.task_id,
+                            agent_state="FAILED",
+                            status="FAILED",
+                            metadata={"reason": reflection.reason},
+                        )
                         return context
                     elif reflection.decision == "RETRY":
                         # Loop continues on the same step
@@ -255,6 +339,12 @@ class AgentStateMachineOrchestrator:
                 AgentStateMachine.transition(
                     context, AgentState.VALIDATE, message="Validating final outputs and provenance"
                 )
+                self._record_audit(
+                    "VALIDATION_STARTED",
+                    action="Validating final outputs and provenance",
+                    task_id=context.task_id,
+                    agent_state="VALIDATE",
+                )
                 val_res = await self.validator.validate(context)
                 context.validation_result = val_res
 
@@ -265,11 +355,27 @@ class AgentStateMachineOrchestrator:
                         AgentState.FAILED,
                         message=f"Validation checks failed: {', '.join(val_res.checks_failed)}",
                     )
+                    self._record_audit(
+                        "TASK_FAILED",
+                        action=f"Validation checks failed: {', '.join(val_res.checks_failed)}",
+                        task_id=context.task_id,
+                        agent_state="FAILED",
+                        status="FAILED",
+                        metadata={"checks_failed": val_res.checks_failed},
+                    )
                     return context
 
                 # ── 6. FINALIZE ───────────────────────────────────────────────
                 AgentStateMachine.transition(
                     context, AgentState.FINALIZE, message="Packaging intermediate results into deliverable"
+                )
+                self._record_audit(
+                    "VALIDATION_COMPLETED",
+                    action="Validation succeeded",
+                    task_id=context.task_id,
+                    agent_state="FINALIZE",
+                    status="SUCCESS",
+                    metadata={"checks_passed": val_res.checks_passed},
                 )
                 context.final_result = self._build_final_result(context)
 
@@ -303,6 +409,13 @@ class AgentStateMachineOrchestrator:
                 AgentStateMachine.transition(
                     context, AgentState.DELIVER, message="Delivering finalized result"
                 )
+                self._record_audit(
+                    "TASK_COMPLETED",
+                    action="Delivering finalized result",
+                    task_id=context.task_id,
+                    agent_state="DELIVER",
+                    status="SUCCESS",
+                )
 
         except Exception as e:
             logger.error("Agent workflow error on task [%s]: %s", context.task_id[:8], str(e))
@@ -314,6 +427,14 @@ class AgentStateMachineOrchestrator:
                     )
                 except Exception:
                     context.current_state = AgentState.FAILED
+            self._record_audit(
+                "TASK_FAILED",
+                action=f"Fatal exception: {str(e)}",
+                task_id=context.task_id,
+                agent_state="FAILED",
+                status="FAILED",
+                metadata={"error": str(e)},
+            )
 
         return context
 

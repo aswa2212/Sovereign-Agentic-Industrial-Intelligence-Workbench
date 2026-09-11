@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 try:
     from app.api.v1.endpoints.agent import router as agent_router
+    from app.api.v1.endpoints.audit import router as audit_router
     from app.api.v1.endpoints.files import router as files_router
     from app.api.v1.endpoints.health import router as health_router
     from app.api.v1.endpoints.models import router as models_router
@@ -20,6 +21,7 @@ try:
     from app.api.v1.endpoints.vision import router as vision_router
 except ImportError:
     from backend.app.api.v1.endpoints.agent import router as agent_router
+    from backend.app.api.v1.endpoints.audit import router as audit_router
     from backend.app.api.v1.endpoints.deliverables import router as deliverables_router
     from backend.app.api.v1.endpoints.files import router as files_router
     from backend.app.api.v1.endpoints.health import router as health_router
@@ -63,4 +65,8 @@ api_v1_router.include_router(validation_router)
 
 # Phase 10 — Deterministic Office Deliverables endpoints
 api_v1_router.include_router(deliverables_router)
+
+# Phase 11 — Audit & Sovereignty Evidence endpoints
+api_v1_router.include_router(audit_router)
+
 

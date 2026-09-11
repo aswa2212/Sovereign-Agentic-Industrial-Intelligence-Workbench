@@ -8,7 +8,7 @@ and ensures post-generation structural verification.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 try:
     from app.core.config import get_settings
@@ -66,9 +66,14 @@ class DeliverablesFactory:
     Enforces Phase 9 validation bounds before permitting document construction.
     """
 
-    def __init__(self, output_dir: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        output_dir: Optional[Path] = None,
+        audit_service: Optional[Any] = None,
+    ) -> None:
         settings = get_settings()
         self.base_output_dir = output_dir or (settings.project_root / settings.output_dir)
+        self.audit_service = audit_service
 
         # Output sub-folders for each format
         self.format_dirs: Dict[DeliverableFormat, Path] = {
@@ -130,6 +135,25 @@ class DeliverablesFactory:
 
             self._artifacts[artifact.artifact_id] = artifact
             artifacts_produced.append(artifact)
+
+            if self.audit_service:
+                try:
+                    from app.services.audit.models import AuditEventType
+                    self.audit_service.record_event(
+                        event_type=AuditEventType.DELIVERABLE_CREATED,
+                        action=f"Created {artifact.format.value.upper()} deliverable: {artifact.filename}",
+                        task_id=effective_task_id,
+                        status="SUCCESS",
+                        metadata={
+                            "artifact_id": artifact.artifact_id,
+                            "format": artifact.format.value,
+                            "filename": artifact.filename,
+                            "file_size_bytes": artifact.file_size_bytes,
+                            "equipment_id": validated_data.equipment_id,
+                        },
+                    )
+                except Exception as audit_err:
+                    logger.warning("Audit logging for deliverable failed: %s", audit_err)
 
         summary_msg = (
             f"Successfully generated {len(artifacts_produced)} verified Office deliverable(s) "
