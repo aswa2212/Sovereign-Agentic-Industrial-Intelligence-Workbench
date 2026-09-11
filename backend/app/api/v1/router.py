@@ -19,6 +19,7 @@ try:
     from app.api.v1.endpoints.system import router as system_router
     from app.api.v1.endpoints.validation import router as validation_router
     from app.api.v1.endpoints.vision import router as vision_router
+    from app.api.v1.endpoints.workflows import router as workflows_router
 except ImportError:
     from backend.app.api.v1.endpoints.agent import router as agent_router
     from backend.app.api.v1.endpoints.audit import router as audit_router
@@ -32,6 +33,7 @@ except ImportError:
     from backend.app.api.v1.endpoints.system import router as system_router
     from backend.app.api.v1.endpoints.validation import router as validation_router
     from backend.app.api.v1.endpoints.vision import router as vision_router
+    from backend.app.api.v1.endpoints.workflows import router as workflows_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
@@ -68,5 +70,8 @@ api_v1_router.include_router(deliverables_router)
 
 # Phase 11 — Audit & Sovereignty Evidence endpoints
 api_v1_router.include_router(audit_router)
+
+# Phase 13 — End-to-End System Integration Workflows
+api_v1_router.include_router(workflows_router)
 
 

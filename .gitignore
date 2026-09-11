@@ -53,6 +53,8 @@ models/cache/
 # Runtime Logs & Temp Files
 logs/*.log
 logs/*.jsonl
+data/audit/*
+backend/data/audit/*
 *.tmp
 *.temp
 
