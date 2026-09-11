@@ -12,6 +12,7 @@ try:
     from app.api.v1.endpoints.models import router as models_router
     from app.api.v1.endpoints.rag import router as rag_router
     from app.api.v1.endpoints.router import router as task_router_router
+    from app.api.v1.endpoints.sandbox import router as sandbox_router
     from app.api.v1.endpoints.system import router as system_router
     from app.api.v1.endpoints.vision import router as vision_router
 except ImportError:
@@ -21,6 +22,7 @@ except ImportError:
     from backend.app.api.v1.endpoints.models import router as models_router
     from backend.app.api.v1.endpoints.rag import router as rag_router
     from backend.app.api.v1.endpoints.router import router as task_router_router
+    from backend.app.api.v1.endpoints.sandbox import router as sandbox_router
     from backend.app.api.v1.endpoints.system import router as system_router
     from backend.app.api.v1.endpoints.vision import router as vision_router
 
@@ -47,3 +49,6 @@ api_v1_router.include_router(rag_router)
 
 # Phase 7 — Agent State Machine & Orchestrator endpoints
 api_v1_router.include_router(agent_router)
+
+# Phase 8 — Sandboxed Tool Execution endpoints
+api_v1_router.include_router(sandbox_router)

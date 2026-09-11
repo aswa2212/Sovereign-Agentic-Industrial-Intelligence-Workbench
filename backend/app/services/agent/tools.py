@@ -102,6 +102,51 @@ class MockCalculationTool(AgentTool):
         }
 
 
+class SandboxedCalculationTool(AgentTool):
+    """
+    Sandboxed calculation tool wrapping SubprocessSandboxExecutor.
+    Enforces process isolation, policy restrictions, and fail-closed validation.
+    """
+
+    name = "sandboxed_calculation"
+    capability = "calculation"
+    description = "Executes deterministic engineering calculations inside a constrained sandbox."
+
+    def __init__(self, executor: Optional[Any] = None) -> None:
+        if executor is None:
+            try:
+                from app.services.sandbox.subprocess_executor import SubprocessSandboxExecutor
+            except ImportError:
+                from backend.app.services.sandbox.subprocess_executor import SubprocessSandboxExecutor
+            self.executor = SubprocessSandboxExecutor()
+        else:
+            self.executor = executor
+
+    async def execute(self, input_payload: Dict[str, Any], context: AgentContext) -> Dict[str, Any]:
+        try:
+            from app.services.sandbox.base import ExecutionStatus, ToolExecutionRequest
+        except ImportError:
+            from backend.app.services.sandbox.base import ExecutionStatus, ToolExecutionRequest
+
+        tool_name = input_payload.get("tool_name", "minimum_wall_thickness_check")
+        if "input" in input_payload and isinstance(input_payload["input"], dict):
+            tool_input = input_payload["input"]
+        else:
+            tool_input = {k: v for k, v in input_payload.items() if k not in ("tool_name", "execution_mode")}
+
+        req = ToolExecutionRequest(
+            tool_name=tool_name,
+            input=tool_input,
+            execution_mode=input_payload.get("execution_mode", "subprocess"),
+        )
+        res = await self.executor.execute_tool(req)
+        if res.status != ExecutionStatus.SUCCESS:
+            raise ToolExecutionError(
+                f"Sandboxed tool '{tool_name}' failed with status {res.status.value}: {res.error_message}"
+            )
+        return res.structured_result or {}
+
+
 class ToolRegistry:
     """Registry maintaining active agent tools."""
 

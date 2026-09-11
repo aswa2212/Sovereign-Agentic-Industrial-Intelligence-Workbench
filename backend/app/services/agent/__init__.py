@@ -32,6 +32,7 @@ from app.services.agent.tools import (
     AgentTool,
     MockCalculationTool,
     RAGRetrievalTool,
+    SandboxedCalculationTool,
     ToolRegistry,
 )
 from app.services.agent.validator import Validator
@@ -57,6 +58,7 @@ __all__ = [
     "PlanningError",
     "RAGRetrievalTool",
     "Reflector",
+    "SandboxedCalculationTool",
     "StepObservation",
     "StepReflection",
     "ToolExecutionError",

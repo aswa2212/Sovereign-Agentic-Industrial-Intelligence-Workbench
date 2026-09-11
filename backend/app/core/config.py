@@ -118,6 +118,26 @@ class Settings(BaseSettings):
         default=180.0, description="Global wall-clock timeout for entire agent workflow in seconds"
     )
 
+    # Sandboxed Tool Execution Configuration (Phase 8)
+    sandbox_enabled: bool = Field(
+        default=True, description="Whether tool execution sandbox is enabled"
+    )
+    sandbox_timeout_seconds: float = Field(
+        default=15.0, description="Maximum wall-clock execution timeout per tool invocation in seconds"
+    )
+    sandbox_memory_limit_mb: int = Field(
+        default=512, description="Memory ceiling limit for tool process in megabytes"
+    )
+    sandbox_max_output_bytes: int = Field(
+        default=65536, description="Maximum allowed stdout/stderr capture size in bytes (64 KB)"
+    )
+    sandbox_max_input_bytes: int = Field(
+        default=65536, description="Maximum allowed tool input payload size in bytes (64 KB)"
+    )
+    sandbox_scratch_dir: str = Field(
+        default="data/sandbox/scratch", description="Isolated scratch directory for sandbox execution"
+    )
+
     # Task Router Configuration (Phase 3)
     # Threshold below which confidence triggers fallback to the fallback_role.
     # The implementation plan specifies 0.70 as the design target.
