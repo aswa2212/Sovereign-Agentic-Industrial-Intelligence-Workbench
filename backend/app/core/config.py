@@ -104,6 +104,20 @@ class Settings(BaseSettings):
         default=0.65, description="Minimum cosine similarity threshold to consider chunk relevant"
     )
 
+    # Agent State Machine & Orchestrator Configuration (Phase 7)
+    agent_max_steps: int = Field(
+        default=8, description="Maximum execution steps allowed per agent task"
+    )
+    agent_max_retries: int = Field(
+        default=2, description="Maximum retry attempts allowed per plan step"
+    )
+    agent_step_timeout_seconds: float = Field(
+        default=45.0, description="Timeout ceiling for individual plan step execution in seconds"
+    )
+    agent_global_timeout_seconds: float = Field(
+        default=180.0, description="Global wall-clock timeout for entire agent workflow in seconds"
+    )
+
     # Task Router Configuration (Phase 3)
     # Threshold below which confidence triggers fallback to the fallback_role.
     # The implementation plan specifies 0.70 as the design target.

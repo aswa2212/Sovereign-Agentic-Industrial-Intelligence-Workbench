@@ -6,6 +6,7 @@ Assembles sub-routers for health, system, models, task router, and future servic
 from fastapi import APIRouter
 
 try:
+    from app.api.v1.endpoints.agent import router as agent_router
     from app.api.v1.endpoints.files import router as files_router
     from app.api.v1.endpoints.health import router as health_router
     from app.api.v1.endpoints.models import router as models_router
@@ -14,6 +15,7 @@ try:
     from app.api.v1.endpoints.system import router as system_router
     from app.api.v1.endpoints.vision import router as vision_router
 except ImportError:
+    from backend.app.api.v1.endpoints.agent import router as agent_router
     from backend.app.api.v1.endpoints.files import router as files_router
     from backend.app.api.v1.endpoints.health import router as health_router
     from backend.app.api.v1.endpoints.models import router as models_router
@@ -42,3 +44,6 @@ api_v1_router.include_router(vision_router)
 
 # Phase 6 — Sovereign Knowledge & RAG Layer endpoints
 api_v1_router.include_router(rag_router)
+
+# Phase 7 — Agent State Machine & Orchestrator endpoints
+api_v1_router.include_router(agent_router)
