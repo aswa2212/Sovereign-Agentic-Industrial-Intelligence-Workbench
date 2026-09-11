@@ -12,6 +12,7 @@ try:
     from app.api.v1.endpoints.health import router as health_router
     from app.api.v1.endpoints.models import router as models_router
     from app.api.v1.endpoints.rag import router as rag_router
+    from app.api.v1.endpoints.deliverables import router as deliverables_router
     from app.api.v1.endpoints.router import router as task_router_router
     from app.api.v1.endpoints.sandbox import router as sandbox_router
     from app.api.v1.endpoints.system import router as system_router
@@ -19,6 +20,7 @@ try:
     from app.api.v1.endpoints.vision import router as vision_router
 except ImportError:
     from backend.app.api.v1.endpoints.agent import router as agent_router
+    from backend.app.api.v1.endpoints.deliverables import router as deliverables_router
     from backend.app.api.v1.endpoints.files import router as files_router
     from backend.app.api.v1.endpoints.health import router as health_router
     from backend.app.api.v1.endpoints.models import router as models_router
@@ -58,3 +60,7 @@ api_v1_router.include_router(sandbox_router)
 
 # Phase 9 — Structured Output & Validation endpoints
 api_v1_router.include_router(validation_router)
+
+# Phase 10 — Deterministic Office Deliverables endpoints
+api_v1_router.include_router(deliverables_router)
+
