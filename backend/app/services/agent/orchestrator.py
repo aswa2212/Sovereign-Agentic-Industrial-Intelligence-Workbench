@@ -3,6 +3,7 @@ SIH26117 — Agent State Machine Orchestrator
 Coordinates the complete 11-state autonomous reasoning lifecycle:
 RECEIVE -> UNDERSTAND -> PLAN -> EXECUTE -> OBSERVE -> REFLECT -> VALIDATE -> FINALIZE -> DELIVER
 Enforces per-step timeouts (45s) and global execution timeouts (180s).
+Phase 9: VALIDATE state strengthened with StructuredOutputService when final_result is available.
 """
 
 import asyncio
@@ -29,6 +30,7 @@ try:
     from app.services.agent.tools import ToolRegistry
     from app.services.agent.validator import Validator
     from app.services.router.rule_router import RuleRouter
+    from app.services.validation.service import StructuredOutputService as _StructuredOutputService
 except ImportError:
     from backend.app.core.config import get_settings
     from backend.app.services.agent.base import (
@@ -47,6 +49,7 @@ except ImportError:
     from backend.app.services.agent.tools import ToolRegistry
     from backend.app.services.agent.validator import Validator
     from backend.app.services.router.rule_router import RuleRouter
+    from backend.app.services.validation.service import StructuredOutputService as _StructuredOutputService
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,7 @@ class AgentStateMachineOrchestrator:
         tool_registry: Optional[ToolRegistry] = None,
         reflector: Optional[Reflector] = None,
         validator: Optional[Validator] = None,
+        structured_output_service: Optional[_StructuredOutputService] = None,
     ) -> None:
         settings = get_settings()
         self.router = router or RuleRouter()
@@ -70,6 +74,8 @@ class AgentStateMachineOrchestrator:
         self.tool_registry = tool_registry or ToolRegistry()
         self.reflector = reflector or Reflector()
         self.validator = validator or Validator()
+        # Phase 9: optional structured output service (Agent → Service, never reverse)
+        self._structured_output_service = structured_output_service or _StructuredOutputService()
 
         self.step_timeout = settings.agent_step_timeout_seconds
         self.global_timeout = settings.agent_global_timeout_seconds
@@ -266,6 +272,32 @@ class AgentStateMachineOrchestrator:
                     context, AgentState.FINALIZE, message="Packaging intermediate results into deliverable"
                 )
                 context.final_result = self._build_final_result(context)
+
+                # Phase 9: validate the structured final_result through StructuredOutputService
+                # This is additive strengthening of the VALIDATE->FINALIZE boundary.
+                # Only runs when calculation data is present; failures set a warning in context.
+                if context.final_result.get("calculation"):
+                    try:
+                        structured_result = context.final_result.get("calculation", {})
+                        svc_result = self._structured_output_service.validate(structured_result)
+                        context.final_result["structured_validation"] = {
+                            "valid": svc_result.valid,
+                            "status": svc_result.status,
+                            "checks_passed": svc_result.checks_passed,
+                            "checks_failed": svc_result.checks_failed,
+                            "warnings": svc_result.warnings,
+                        }
+                    except Exception as sv_exc:
+                        logger.warning(
+                            "Phase 9 structured output validation raised during finalize: %s", str(sv_exc)
+                        )
+                        context.final_result["structured_validation"] = {
+                            "valid": False,
+                            "status": "INTERNAL_ERROR",
+                            "checks_passed": [],
+                            "checks_failed": ["structured_output_service"],
+                            "warnings": [str(sv_exc)],
+                        }
 
                 # ── 7. DELIVER ────────────────────────────────────────────────
                 AgentStateMachine.transition(

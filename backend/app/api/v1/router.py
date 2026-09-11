@@ -1,6 +1,7 @@
 """
 SIH26117 — API v1 Master Router
 Assembles sub-routers for health, system, models, task router, and future service routes.
+Phase 9 adds the /validation router.
 """
 
 from fastapi import APIRouter
@@ -14,6 +15,7 @@ try:
     from app.api.v1.endpoints.router import router as task_router_router
     from app.api.v1.endpoints.sandbox import router as sandbox_router
     from app.api.v1.endpoints.system import router as system_router
+    from app.api.v1.endpoints.validation import router as validation_router
     from app.api.v1.endpoints.vision import router as vision_router
 except ImportError:
     from backend.app.api.v1.endpoints.agent import router as agent_router
@@ -24,6 +26,7 @@ except ImportError:
     from backend.app.api.v1.endpoints.router import router as task_router_router
     from backend.app.api.v1.endpoints.sandbox import router as sandbox_router
     from backend.app.api.v1.endpoints.system import router as system_router
+    from backend.app.api.v1.endpoints.validation import router as validation_router
     from backend.app.api.v1.endpoints.vision import router as vision_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
@@ -52,3 +55,6 @@ api_v1_router.include_router(agent_router)
 
 # Phase 8 — Sandboxed Tool Execution endpoints
 api_v1_router.include_router(sandbox_router)
+
+# Phase 9 — Structured Output & Validation endpoints
+api_v1_router.include_router(validation_router)
