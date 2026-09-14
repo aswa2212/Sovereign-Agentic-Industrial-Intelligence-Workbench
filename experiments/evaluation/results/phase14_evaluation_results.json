@@ -1,0 +1,1180 @@
+{
+  "suite_name": "SIH26117_Phase14_Evaluation_Suite",
+  "timestamp": "2026-09-12T06:38:13.663660+00:00",
+  "environment": {
+    "os": "Windows 10 (10.0.26200)",
+    "python_version": "3.11.9",
+    "cpu_count_logical": 16,
+    "total_ram_gb": 15.29,
+    "available_ram_gb": 2.66,
+    "gpu_available": true,
+    "gpu_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "gpu_total_vram_mib": 8188,
+    "gpu_free_vram_mib": 2617,
+    "gpu_driver": "592.82"
+  },
+  "models_probed": {
+    "endpoint": "http://127.0.0.1:11434",
+    "raw_models_count": 8,
+    "candidates": [
+      {
+        "model_tag": "qwen2.5:1.5b",
+        "ollama_tag": "qwen2.5:1.5b",
+        "role": "router",
+        "type": "text",
+        "status": "AVAILABLE",
+        "size_gb": 0.92,
+        "parameter_size": "1.5B",
+        "quantization_level": "Q4_K_M"
+      },
+      {
+        "model_tag": "qwen2.5-coder:3b",
+        "ollama_tag": "qwen2.5-coder:3b",
+        "role": "coder",
+        "type": "code",
+        "status": "AVAILABLE",
+        "size_gb": 1.8,
+        "parameter_size": "3.1B",
+        "quantization_level": "Q4_K_M"
+      },
+      {
+        "model_tag": "qwen2.5vl:3b",
+        "ollama_tag": "qwen2.5vl:3b",
+        "role": "vision",
+        "type": "multimodal",
+        "status": "AVAILABLE",
+        "size_gb": 2.98,
+        "parameter_size": "3.8B",
+        "quantization_level": "Q4_K_M"
+      },
+      {
+        "model_tag": "deepseek-r1:7b",
+        "ollama_tag": "deepseek-r1:7b",
+        "role": "reasoning",
+        "type": "reasoning",
+        "status": "AVAILABLE",
+        "size_gb": 4.36,
+        "parameter_size": "7.6B",
+        "quantization_level": "Q4_K_M"
+      },
+      {
+        "model_tag": "nomic-embed-text:latest",
+        "ollama_tag": "nomic-embed-text:latest",
+        "role": "embedding",
+        "type": "embedding",
+        "status": "AVAILABLE",
+        "size_gb": 0.26,
+        "parameter_size": "137M",
+        "quantization_level": "F16"
+      },
+      {
+        "model_tag": "bge-m3:latest",
+        "ollama_tag": "bge-m3:latest",
+        "role": "embedding",
+        "type": "embedding",
+        "status": "AVAILABLE",
+        "size_gb": 1.08,
+        "parameter_size": "566.70M",
+        "quantization_level": "F16"
+      }
+    ]
+  },
+  "routing_evaluation": {
+    "benchmark_name": "router_accuracy_evaluation",
+    "total_samples": 64,
+    "target_accuracy": 0.9,
+    "overall_accuracy": 0.9062,
+    "target_met": true,
+    "fallback_count": 7,
+    "fallback_rate": 0.1094,
+    "confidence_distribution": {
+      "mean_confidence": 0.798,
+      "min_confidence": 0.0,
+      "max_confidence": 0.92
+    },
+    "per_class_metrics": {
+      "calculation": {
+        "support": 8,
+        "true_positive": 7,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision": 0.7,
+        "recall": 0.875,
+        "f1_score": 0.7778
+      },
+      "coding": {
+        "support": 8,
+        "true_positive": 8,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0
+      },
+      "document_analysis": {
+        "support": 8,
+        "true_positive": 8,
+        "false_positive": 1,
+        "false_negative": 0,
+        "precision": 0.8889,
+        "recall": 1.0,
+        "f1_score": 0.9412
+      },
+      "extraction": {
+        "support": 8,
+        "true_positive": 7,
+        "false_positive": 0,
+        "false_negative": 1,
+        "precision": 1.0,
+        "recall": 0.875,
+        "f1_score": 0.9333
+      },
+      "general": {
+        "support": 8,
+        "true_positive": 7,
+        "false_positive": 0,
+        "false_negative": 1,
+        "precision": 1.0,
+        "recall": 0.875,
+        "f1_score": 0.9333
+      },
+      "reasoning": {
+        "support": 8,
+        "true_positive": 6,
+        "false_positive": 0,
+        "false_negative": 2,
+        "precision": 1.0,
+        "recall": 0.75,
+        "f1_score": 0.8571
+      },
+      "summarization": {
+        "support": 8,
+        "true_positive": 7,
+        "false_positive": 1,
+        "false_negative": 1,
+        "precision": 0.875,
+        "recall": 0.875,
+        "f1_score": 0.875
+      },
+      "vision": {
+        "support": 8,
+        "true_positive": 8,
+        "false_positive": 1,
+        "false_negative": 0,
+        "precision": 0.8889,
+        "recall": 1.0,
+        "f1_score": 0.9412
+      }
+    },
+    "confusion_matrix": {
+      "calculation": {
+        "calculation": 7,
+        "coding": 0,
+        "document_analysis": 0,
+        "extraction": 0,
+        "general": 0,
+        "reasoning": 0,
+        "summarization": 0,
+        "vision": 1
+      },
+      "coding": {
+        "calculation": 0,
+        "coding": 8,
+        "document_analysis": 0,
+        "extraction": 0,
+        "general": 0,
+        "reasoning": 0,
+        "summarization": 0,
+        "vision": 0
+      },
+      "document_analysis": {
+        "calculation": 0,
+        "coding": 0,
+        "document_analysis": 8,
+        "extraction": 0,
+        "general": 0,
+        "reasoning": 0,
+        "summarization": 0,
+        "vision": 0
+      },
+      "extraction": {
+        "calculation": 1,
+        "coding": 0,
+        "document_analysis": 0,
+        "extraction": 7,
+        "general": 0,
+        "reasoning": 0,
+        "summarization": 0,
+        "vision": 0
+      },
+      "general": {
+        "calculation": 0,
+        "coding": 0,
+        "document_analysis": 1,
+        "extraction": 0,
+        "general": 7,
+        "reasoning": 0,
+        "summarization": 0,
+        "vision": 0
+      },
+      "reasoning": {
+        "calculation": 1,
+        "coding": 0,
+        "document_analysis": 0,
+        "extraction": 0,
+        "general": 0,
+        "reasoning": 6,
+        "summarization": 1,
+        "vision": 0
+      },
+      "summarization": {
+        "calculation": 1,
+        "coding": 0,
+        "document_analysis": 0,
+        "extraction": 0,
+        "general": 0,
+        "reasoning": 0,
+        "summarization": 7,
+        "vision": 0
+      },
+      "vision": {
+        "calculation": 0,
+        "coding": 0,
+        "document_analysis": 0,
+        "extraction": 0,
+        "general": 0,
+        "reasoning": 0,
+        "summarization": 0,
+        "vision": 8
+      }
+    },
+    "false_routings_count": 6,
+    "false_routings": [
+      {
+        "task_id": "calc_04",
+        "task": "Determine pressure drop across orifice plate given fluid density and volumetric flow rate",
+        "expected_task_type": "calculation",
+        "predicted_task_type": "vision",
+        "predicted_capability": "vision",
+        "predicted_role": "vision",
+        "confidence": 0.92,
+        "reason": "Task contains visual/P&ID signal 'plate' \u2014 routing to vision model for image understanding.",
+        "matched_rule_id": "vision_pid_signal"
+      },
+      {
+        "task_id": "ext_03",
+        "task": "Tabulate all ultrasonic thickness measurement values from the inspection report",
+        "expected_task_type": "extraction",
+        "predicted_task_type": "calculation",
+        "predicted_capability": "calculation",
+        "predicted_role": "reasoning",
+        "confidence": 0.88,
+        "reason": "Task contains calculation signal 'thickness measurement' \u2014 routing to reasoning model for numerical analysis.",
+        "matched_rule_id": "calculation_signal"
+      },
+      {
+        "task_id": "sum_05",
+        "task": "Recap the main conclusions from the crude distillation unit energy efficiency study",
+        "expected_task_type": "summarization",
+        "predicted_task_type": "calculation",
+        "predicted_capability": "calculation",
+        "predicted_role": "reasoning",
+        "confidence": 0.88,
+        "reason": "Task contains calculation signal 'efficiency' \u2014 routing to reasoning model for numerical analysis.",
+        "matched_rule_id": "calculation_signal"
+      },
+      {
+        "task_id": "rea_05",
+        "task": "Think through step by step how to isolate overhead condenser E-101 without tripping column C-101",
+        "expected_task_type": "reasoning",
+        "predicted_task_type": "summarization",
+        "predicted_capability": "reasoning",
+        "predicted_role": "reasoning",
+        "confidence": 0.8,
+        "reason": "Task contains summarization signal 'condense' \u2014 routing to reasoning model for text summarization.",
+        "matched_rule_id": "summarization_signal"
+      },
+      {
+        "task_id": "rea_06",
+        "task": "Justify the decision to downgrade design pressure rating of vacuum furnace transfer line",
+        "expected_task_type": "reasoning",
+        "predicted_task_type": "calculation",
+        "predicted_capability": "calculation",
+        "predicted_role": "reasoning",
+        "confidence": 0.88,
+        "reason": "Task contains calculation signal 'pressure rating' \u2014 routing to reasoning model for numerical analysis.",
+        "matched_rule_id": "calculation_signal"
+      },
+      {
+        "task_id": "gen_07",
+        "task": "Can you assist me with refinery operations today",
+        "expected_task_type": "general",
+        "predicted_task_type": "document_analysis",
+        "predicted_capability": "reasoning",
+        "predicted_role": "reasoning",
+        "confidence": 0.85,
+        "reason": "Task contains document analysis signal 'refinery' \u2014 routing to reasoning model for engineering document analysis.",
+        "matched_rule_id": "document_analysis_signal"
+      }
+    ],
+    "routing_latency_stats": {
+      "count": 64,
+      "mean_sec": 0.0,
+      "median_sec": 0.0,
+      "p95_sec": 0.0,
+      "min_sec": 0.0,
+      "max_sec": 0.0001,
+      "note": "Statistically sufficient sample size"
+    }
+  },
+  "model_inference_benchmark": {
+    "benchmark_name": "model_inference_benchmark",
+    "models_evaluated": [
+      {
+        "model_tag": "qwen2.5:1.5b",
+        "ollama_tag": "qwen2.5:1.5b",
+        "role": "router",
+        "parameter_size": "1.5B",
+        "quantization": "Q4_K_M",
+        "cold_run": {
+          "latency_sec": 2.9391,
+          "load_duration_sec": 2.6214,
+          "eval_tokens": 31,
+          "tokens_per_sec": 150.28,
+          "vram_delta_mb": 792.0,
+          "vram_before_mb": 5340.0,
+          "vram_after_mb": 6132.0,
+          "success": true,
+          "error": null
+        },
+        "warm_runs": [
+          {
+            "trial": 1,
+            "latency_sec": 0.1933,
+            "eval_tokens": 31,
+            "tokens_per_sec": 178.66,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "trial": 2,
+            "latency_sec": 0.2085,
+            "eval_tokens": 31,
+            "tokens_per_sec": 164.21,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "trial": 3,
+            "latency_sec": 0.2113,
+            "eval_tokens": 31,
+            "tokens_per_sec": 176.58,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          }
+        ],
+        "warm_latency_stats": {
+          "count": 3,
+          "mean_sec": 0.2044,
+          "median_sec": 0.2085,
+          "p95_sec": null,
+          "min_sec": 0.1933,
+          "max_sec": 0.2113,
+          "note": "Sample size (N=3) is too small for statistically valid P95 calculation"
+        },
+        "warm_mean_tokens_per_sec": 173.15
+      },
+      {
+        "model_tag": "qwen2.5-coder:3b",
+        "ollama_tag": "qwen2.5-coder:3b",
+        "role": "coder",
+        "parameter_size": "3.1B",
+        "quantization": "Q4_K_M",
+        "cold_run": {
+          "latency_sec": 8.614,
+          "load_duration_sec": 8.1333,
+          "eval_tokens": 34,
+          "tokens_per_sec": 98.21,
+          "vram_delta_mb": 950.0,
+          "vram_before_mb": 6132.0,
+          "vram_after_mb": 7082.0,
+          "success": true,
+          "error": null
+        },
+        "warm_runs": [
+          {
+            "trial": 1,
+            "latency_sec": 0.4223,
+            "eval_tokens": 42,
+            "tokens_per_sec": 105.79,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "trial": 2,
+            "latency_sec": 0.4338,
+            "eval_tokens": 38,
+            "tokens_per_sec": 96.39,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "trial": 3,
+            "latency_sec": 0.334,
+            "eval_tokens": 33,
+            "tokens_per_sec": 106.67,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          }
+        ],
+        "warm_latency_stats": {
+          "count": 3,
+          "mean_sec": 0.3967,
+          "median_sec": 0.4223,
+          "p95_sec": null,
+          "min_sec": 0.334,
+          "max_sec": 0.4338,
+          "note": "Sample size (N=3) is too small for statistically valid P95 calculation"
+        },
+        "warm_mean_tokens_per_sec": 102.95
+      },
+      {
+        "model_tag": "deepseek-r1:7b",
+        "ollama_tag": "deepseek-r1:7b",
+        "role": "reasoning",
+        "parameter_size": "7.6B",
+        "quantization": "Q4_K_M",
+        "cold_run": {
+          "latency_sec": 19.5179,
+          "load_duration_sec": 16.8724,
+          "eval_tokens": 128,
+          "tokens_per_sec": 50.91,
+          "vram_delta_mb": -2441.0,
+          "vram_before_mb": 7082.0,
+          "vram_after_mb": 4641.0,
+          "success": true,
+          "error": null
+        },
+        "warm_runs": [
+          {
+            "trial": 1,
+            "latency_sec": 2.5032,
+            "eval_tokens": 128,
+            "tokens_per_sec": 52.07,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "trial": 2,
+            "latency_sec": 2.5299,
+            "eval_tokens": 128,
+            "tokens_per_sec": 51.53,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "trial": 3,
+            "latency_sec": 2.5292,
+            "eval_tokens": 128,
+            "tokens_per_sec": 51.44,
+            "vram_delta_mb": 0.0,
+            "success": true,
+            "error": null
+          }
+        ],
+        "warm_latency_stats": {
+          "count": 3,
+          "mean_sec": 2.5208,
+          "median_sec": 2.5292,
+          "p95_sec": null,
+          "min_sec": 2.5032,
+          "max_sec": 2.5299,
+          "note": "Sample size (N=3) is too small for statistically valid P95 calculation"
+        },
+        "warm_mean_tokens_per_sec": 51.68
+      }
+    ]
+  },
+  "sequential_switching_benchmark": {
+    "benchmark_name": "sequential_model_switching",
+    "transitions": [
+      {
+        "step": 1,
+        "action": "load_reasoning",
+        "model": "deepseek-r1:7b",
+        "latency_sec": 2.5536,
+        "load_duration_sec": 0.0051,
+        "success": true,
+        "error": null,
+        "vram_before_mb": 4641.0,
+        "vram_after_mb": 4641.0,
+        "vram_delta_mb": 0.0
+      },
+      {
+        "step": 2,
+        "action": "swap_to_vision",
+        "model": "qwen2.5vl:3b",
+        "latency_sec": 8.1531,
+        "load_duration_sec": 7.6559,
+        "success": true,
+        "error": null,
+        "vram_before_mb": 4641.0,
+        "vram_after_mb": 4095.0,
+        "vram_delta_mb": -546.0
+      },
+      {
+        "step": 3,
+        "action": "swap_back_reasoning",
+        "model": "deepseek-r1:7b",
+        "latency_sec": 9.3977,
+        "load_duration_sec": 6.739,
+        "success": true,
+        "error": null,
+        "vram_before_mb": 4095.0,
+        "vram_after_mb": 4641.0,
+        "vram_delta_mb": 546.0
+      }
+    ],
+    "serial_execution_viable": true
+  },
+  "rag_retrieval_evaluation": {
+    "benchmark_name": "rag_retrieval_evaluation",
+    "total_queries": 12,
+    "in_domain_queries": 10,
+    "out_of_domain_queries": 2,
+    "retrieval_metrics": {
+      "queries_count": 12,
+      "empty_retrieval_count": 2,
+      "mean_reciprocal_rank": 0.6,
+      "mean_precision@1": 0.6,
+      "mean_recall@1": 0.55,
+      "mean_precision@2": 0.6,
+      "mean_recall@2": 1.1,
+      "mean_precision@3": 0.6,
+      "mean_recall@3": 1.65,
+      "empty_retrieval_rate": 0.1667
+    },
+    "citation_doc_accuracy": 1.0,
+    "citation_page_accuracy": 0.8,
+    "latency_stats": {
+      "count": 12,
+      "mean_sec": 0.0008,
+      "median_sec": 0.0004,
+      "p95_sec": null,
+      "min_sec": 0.0003,
+      "max_sec": 0.0041,
+      "note": "Sample size (N=12) is too small for statistically valid P95 calculation"
+    },
+    "query_details": [
+      {
+        "query_id": "rag_01",
+        "query": "What is the minimum allowable retirement wall thickness for Class 150 carbon steel piping?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0003",
+          "a1b2c3d4e5f6_p3_c0003",
+          "a1b2c3d4e5f6_p3_c0003"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0002",
+          "a1b2c3d4e5f6_p3_c0003"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0041
+      },
+      {
+        "query_id": "rag_02",
+        "query": "What actions are mandated if ultrasonic thickness reading falls below 3.2 mm?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0002"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": false,
+        "latency_sec": 0.0008
+      },
+      {
+        "query_id": "rag_03",
+        "query": "What standards must ultrasonic thickness measurements comply with according to Lead Engineer responsibilities?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p2_c0001"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0006
+      },
+      {
+        "query_id": "rag_04",
+        "query": "Where must Corrosion Monitoring Locations CML be permanently marked?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p2_c0001"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_05",
+        "query": "What units are covered under the piping integrity inspection standard operating procedure scope?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p1_c0000",
+          "a1b2c3d4e5f6_p1_c0000",
+          "a1b2c3d4e5f6_p1_c0000"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p1_c0000"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_06",
+        "query": "What is the document code and revision number of the piping integrity inspection standard operating procedure?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p1_c0000",
+          "a1b2c3d4e5f6_p1_c0000",
+          "a1b2c3d4e5f6_p1_c0000"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p1_c0000"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_07",
+        "query": "According to the table specifications what is the nominal wall thickness for a 6 inch Class 150 pipe?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0002",
+          "a1b2c3d4e5f6_p3_c0002",
+          "a1b2c3d4e5f6_p3_c0002"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0003"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_08",
+        "query": "What is the nominal wall thickness for a 10 inch Class 150 ASTM A106 pipe?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0003",
+          "a1b2c3d4e5f6_p3_c0003",
+          "a1b2c3d4e5f6_p3_c0003"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0003"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_09",
+        "query": "What is the minimum retirement wall thickness specified in the table for 2 inch Class 150 pipes?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0002",
+          "a1b2c3d4e5f6_p3_c0002",
+          "a1b2c3d4e5f6_p3_c0002"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0003"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": true,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_10",
+        "query": "Who is the authority that must be notified when ultrasonic thickness gauging reading falls below 3.2 mm?",
+        "is_in_domain": true,
+        "retrieved_count": 3,
+        "retrieved_chunk_ids": [
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001",
+          "a1b2c3d4e5f6_p2_c0001"
+        ],
+        "ground_truth_chunk_ids": [
+          "a1b2c3d4e5f6_p3_c0002"
+        ],
+        "citation_doc_matched": true,
+        "page_matched": false,
+        "latency_sec": 0.0004
+      },
+      {
+        "query_id": "rag_neg_01",
+        "query": "What is the recipe for baking chocolate chip cookies in an electric oven?",
+        "is_in_domain": false,
+        "retrieved_count": 0,
+        "retrieved_chunk_ids": [],
+        "ground_truth_chunk_ids": [],
+        "citation_doc_matched": false,
+        "page_matched": false,
+        "latency_sec": 0.0003
+      },
+      {
+        "query_id": "rag_neg_02",
+        "query": "Who won the ICC cricket world cup in 2011?",
+        "is_in_domain": false,
+        "retrieved_count": 0,
+        "retrieved_chunk_ids": [],
+        "ground_truth_chunk_ids": [],
+        "citation_doc_matched": false,
+        "page_matched": false,
+        "latency_sec": 0.0003
+      }
+    ]
+  },
+  "embedding_comparison_benchmark": {
+    "benchmark_name": "embedding_comparison_benchmark",
+    "models_evaluated": [
+      {
+        "model": "nomic-embed-text:latest",
+        "status": "AVAILABLE",
+        "dimension": 768,
+        "latency_stats": {
+          "count": 3,
+          "mean_sec": 0.4707,
+          "median_sec": 0.16,
+          "p95_sec": null,
+          "min_sec": 0.0312,
+          "max_sec": 1.2209,
+          "note": "Sample size (N=3) is too small for statistically valid P95 calculation"
+        },
+        "semantic_similarity_matched": 0.7613,
+        "semantic_similarity_unrelated": 0.3696,
+        "discrimination_margin": 0.3917,
+        "discrimination_effective": true
+      },
+      {
+        "model": "bge-m3:latest",
+        "status": "AVAILABLE",
+        "dimension": 1024,
+        "latency_stats": {
+          "count": 3,
+          "mean_sec": 1.3547,
+          "median_sec": 0.0559,
+          "p95_sec": null,
+          "min_sec": 0.0291,
+          "max_sec": 3.979,
+          "note": "Sample size (N=3) is too small for statistically valid P95 calculation"
+        },
+        "semantic_similarity_matched": 0.523,
+        "semantic_similarity_unrelated": 0.3368,
+        "discrimination_margin": 0.1862,
+        "discrimination_effective": false
+      }
+    ]
+  },
+  "ocr_vision_evaluation": {
+    "benchmark_name": "ocr_vision_evaluation",
+    "ocr_evaluation": {
+      "real_ocr_provider": "tesseract",
+      "real_ocr_available": false,
+      "real_ocr_status": "REAL OCR PROVIDER UNAVAILABLE",
+      "mock_ocr_baseline": {
+        "provider": "MockOCRProvider",
+        "latency_sec": 0.0143,
+        "tokens_count": 29,
+        "confidence_avg": 0.9607,
+        "sample_tokens": [
+          "MRPL",
+          "NDT",
+          "ULTRASONIC",
+          "INSPECTION",
+          "REPORT"
+        ],
+        "status": "success"
+      }
+    },
+    "pid_schematic_evaluation": {
+      "ground_truth_tags_count": 5,
+      "detected_tags_count": 4,
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "detection_rate": 0.8,
+      "mean_bounding_box_iou": 1.0,
+      "detections": [
+        {
+          "tag": "C-101",
+          "type": "equipment_tag",
+          "detected": true,
+          "confidence": 0.96,
+          "iou": 1.0
+        },
+        {
+          "tag": "PT-101",
+          "type": "instrument_tag",
+          "detected": true,
+          "confidence": 0.94,
+          "iou": 1.0
+        },
+        {
+          "tag": "FT-202",
+          "type": "instrument_tag",
+          "detected": true,
+          "confidence": 0.91,
+          "iou": 1.0
+        },
+        {
+          "tag": "TT-101",
+          "type": "instrument_tag",
+          "detected": false,
+          "confidence": 0.0,
+          "iou": 0.0
+        },
+        {
+          "tag": "10-CDU-0101-CS150",
+          "type": "line_id",
+          "detected": true,
+          "confidence": 0.89,
+          "iou": 1.0
+        }
+      ],
+      "provider_evaluated": "mock_vision_engine",
+      "latency_sec": 0.0009,
+      "limitation_note": "Evaluated against controlled synthetic schematic ground truth. Does not represent industrial-scale P&ID accuracy across messy full-scale refinery scans."
+    },
+    "real_vlm_evaluation": {
+      "model": "qwen2.5vl:3b",
+      "provider": "ollama_local",
+      "status": "AVAILABLE",
+      "latency_sec": 6.8467,
+      "response_text": "- C-101\n- Atmospheric Column\n- FT-202\n- PT-101",
+      "eval_count": 25,
+      "tokens_per_sec": 92.29
+    }
+  },
+  "e2e_performance_benchmark": {
+    "benchmark_name": "e2e_performance_benchmark",
+    "execution_mode": "DETERMINISTIC",
+    "total_trials": 5,
+    "overall_latency_stats": {
+      "count": 5,
+      "mean_sec": 1.3622,
+      "median_sec": 1.3854,
+      "p95_sec": null,
+      "min_sec": 1.0869,
+      "max_sec": 1.568,
+      "note": "Sample size (N=5) is too small for statistically valid P95 calculation"
+    },
+    "stages_breakdown": [
+      {
+        "stage": "document_ingestion",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0248,
+        "median_sec": 0.031,
+        "p95_sec": null,
+        "min_sec": 0.015,
+        "max_sec": 0.031,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "ocr_vision_analysis",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0,
+        "median_sec": 0.0,
+        "p95_sec": null,
+        "min_sec": 0.0,
+        "max_sec": 0.0,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "task_routing",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0126,
+        "median_sec": 0.016,
+        "p95_sec": null,
+        "min_sec": 0.0,
+        "max_sec": 0.016,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "model_allocation",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0062,
+        "median_sec": 0.0,
+        "p95_sec": null,
+        "min_sec": 0.0,
+        "max_sec": 0.016,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "knowledge_retrieval",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.003,
+        "median_sec": 0.0,
+        "p95_sec": null,
+        "min_sec": 0.0,
+        "max_sec": 0.015,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "agent_orchestration",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.1284,
+        "median_sec": 0.125,
+        "p95_sec": null,
+        "min_sec": 0.11,
+        "max_sec": 0.141,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "sandboxed_calculation",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.9342,
+        "median_sec": 0.953,
+        "p95_sec": null,
+        "min_sec": 0.734,
+        "max_sec": 1.078,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "engineering_validation_gate",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0,
+        "median_sec": 0.0,
+        "p95_sec": null,
+        "min_sec": 0.0,
+        "max_sec": 0.0,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "deliverables_factory",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.2002,
+        "median_sec": 0.219,
+        "p95_sec": null,
+        "min_sec": 0.141,
+        "max_sec": 0.219,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "audit_chain_verification",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0438,
+        "median_sec": 0.047,
+        "p95_sec": null,
+        "min_sec": 0.031,
+        "max_sec": 0.047,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      },
+      {
+        "stage": "sovereignty_verification",
+        "mode": "DETERMINISTIC",
+        "mean_sec": 0.0,
+        "median_sec": 0.0,
+        "p95_sec": null,
+        "min_sec": 0.0,
+        "max_sec": 0.0,
+        "sample_count": 5,
+        "notes": "Sample size (N=5) is too small for statistically valid P95 calculation"
+      }
+    ],
+    "trials": [
+      {
+        "trial": 1,
+        "workflow_id": "cc8082d3ec184ce88638ab5c0083248c",
+        "overall_status": "COMPLETED",
+        "total_latency_sec": 1.568,
+        "stages_count": 11,
+        "stage_durations_sec": {
+          "document_ingestion": 0.031,
+          "ocr_vision_analysis": 0.0,
+          "task_routing": 0.016,
+          "model_allocation": 0.015,
+          "knowledge_retrieval": 0.0,
+          "agent_orchestration": 0.141,
+          "sandboxed_calculation": 1.078,
+          "engineering_validation_gate": 0.0,
+          "deliverables_factory": 0.219,
+          "audit_chain_verification": 0.047,
+          "sovereignty_verification": 0.0
+        },
+        "artifacts_count": 2,
+        "audit_ledger_valid": true,
+        "airgap_confirmed": true
+      },
+      {
+        "trial": 2,
+        "workflow_id": "9b34589fa1b64e268bbef92ccde8fb27",
+        "overall_status": "COMPLETED",
+        "total_latency_sec": 1.3854,
+        "stages_count": 11,
+        "stage_durations_sec": {
+          "document_ingestion": 0.015,
+          "ocr_vision_analysis": 0.0,
+          "task_routing": 0.016,
+          "model_allocation": 0.0,
+          "knowledge_retrieval": 0.015,
+          "agent_orchestration": 0.11,
+          "sandboxed_calculation": 0.969,
+          "engineering_validation_gate": 0.0,
+          "deliverables_factory": 0.203,
+          "audit_chain_verification": 0.047,
+          "sovereignty_verification": 0.0
+        },
+        "artifacts_count": 2,
+        "audit_ledger_valid": true,
+        "airgap_confirmed": true
+      },
+      {
+        "trial": 3,
+        "workflow_id": "31f8a7064f1e4d89a2e663fc5641488d",
+        "overall_status": "COMPLETED",
+        "total_latency_sec": 1.4024,
+        "stages_count": 11,
+        "stage_durations_sec": {
+          "document_ingestion": 0.016,
+          "ocr_vision_analysis": 0.0,
+          "task_routing": 0.015,
+          "model_allocation": 0.0,
+          "knowledge_retrieval": 0.0,
+          "agent_orchestration": 0.141,
+          "sandboxed_calculation": 0.953,
+          "engineering_validation_gate": 0.0,
+          "deliverables_factory": 0.219,
+          "audit_chain_verification": 0.047,
+          "sovereignty_verification": 0.0
+        },
+        "artifacts_count": 2,
+        "audit_ledger_valid": true,
+        "airgap_confirmed": true
+      },
+      {
+        "trial": 4,
+        "workflow_id": "7a17e351c78d4147bd144309c8d20e79",
+        "overall_status": "COMPLETED",
+        "total_latency_sec": 1.3684,
+        "stages_count": 11,
+        "stage_durations_sec": {
+          "document_ingestion": 0.031,
+          "ocr_vision_analysis": 0.0,
+          "task_routing": 0.016,
+          "model_allocation": 0.0,
+          "knowledge_retrieval": 0.0,
+          "agent_orchestration": 0.125,
+          "sandboxed_calculation": 0.937,
+          "engineering_validation_gate": 0.0,
+          "deliverables_factory": 0.219,
+          "audit_chain_verification": 0.047,
+          "sovereignty_verification": 0.0
+        },
+        "artifacts_count": 2,
+        "audit_ledger_valid": true,
+        "airgap_confirmed": true
+      },
+      {
+        "trial": 5,
+        "workflow_id": "de52f102145b4f51b2ef485115419c0a",
+        "overall_status": "COMPLETED",
+        "total_latency_sec": 1.0869,
+        "stages_count": 11,
+        "stage_durations_sec": {
+          "document_ingestion": 0.031,
+          "ocr_vision_analysis": 0.0,
+          "task_routing": 0.0,
+          "model_allocation": 0.016,
+          "knowledge_retrieval": 0.0,
+          "agent_orchestration": 0.125,
+          "sandboxed_calculation": 0.734,
+          "engineering_validation_gate": 0.0,
+          "deliverables_factory": 0.141,
+          "audit_chain_verification": 0.031,
+          "sovereignty_verification": 0.0
+        },
+        "artifacts_count": 2,
+        "audit_ledger_valid": true,
+        "airgap_confirmed": true
+      }
+    ],
+    "claim_discipline_note": "Deterministic integration path completed in ~1.8 seconds. This measurement reflects local orchestration without live LLM inference tokens. Real local LLM inference requires separate model-level latency measurement."
+  },
+  "failure_degradation_benchmark": {
+    "benchmark_name": "failure_degradation_benchmark",
+    "scenarios_evaluated": [
+      {
+        "scenario": "missing_document",
+        "detection_latency_sec": 0.0155,
+        "stopped_cleanly": true,
+        "deliverables_withheld": true,
+        "final_status": "FAILED",
+        "error_observed": "Specified document 'non_existent_file_999.pdf' was not found at D:\\PROJECT WORKS\\SIH 2026\\data\\samples\\non_existent_file_999.pdf and no bytes provided."
+      },
+      {
+        "scenario": "corrupt_document_bytes",
+        "detection_latency_sec": 0.0228,
+        "stopped_cleanly": true,
+        "deliverables_withheld": true,
+        "final_status": "FAILED",
+        "error_observed": "Invalid PDF file: Missing '%PDF-' header signature."
+      },
+      {
+        "scenario": "fail_closed_validation_rejection",
+        "detection_latency_sec": 0.0002,
+        "stopped_cleanly": true,
+        "deliverables_withheld": true,
+        "final_status": "VALIDATION_FAILED",
+        "checks_failed": [
+          "schema_validation"
+        ]
+      }
+    ],
+    "all_scenarios_safe": true
+  }
+}
