@@ -726,6 +726,19 @@ class CorrosionAuditWorkflow:
                 "airgap_confirmed": not sov_check.external_connections_observed,
             }
 
+            if sov_check.status != "PASS" or sov_check.external_connections_observed:
+                st_sovereignty.status = StageStatus.FAILED
+                st_sovereignty.error = f"Sovereignty violation detected: {sov_check.violations}"
+                st_sovereignty.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                st_sovereignty.completed_at = utc_now_iso()
+                st_sovereignty.details = sovereignty_summary
+                stages_telemetry.append(st_sovereignty)
+                deliverable_summaries.clear()
+                raise IntegrationError(
+                    f"Sovereignty check failed: {len(sov_check.violations)} violations observed",
+                    stage="sovereignty_verification",
+                )
+
             st_sovereignty.status = StageStatus.SUCCESS
             st_sovereignty.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
             st_sovereignty.completed_at = utc_now_iso()
