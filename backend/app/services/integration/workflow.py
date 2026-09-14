@@ -67,6 +67,11 @@ from app.services.validation.models import (
 from app.services.validation.service import StructuredOutputService
 from app.services.vision.base import OCREngineUnavailableError, VisionError
 from app.services.vision.ocr_engine import LocalOCREngine, MockOCRProvider
+from app.services.vision.vlm_client import (
+    MockVisionProvider,
+    ModelManagerVisionProvider,
+    VisionEngine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +94,7 @@ class CorrosionAuditWorkflow:
         audit_service: Optional[AuditService] = None,
         network_monitor: Optional[RuntimeNetworkMonitor] = None,
         ocr_engine: Optional[LocalOCREngine] = None,
+        vision_engine: Optional[VisionEngine] = None,
     ) -> None:
         self.settings = get_settings()
         self.ingestion_service = ingestion_service or IngestionService()
@@ -102,6 +108,9 @@ class CorrosionAuditWorkflow:
         self.network_monitor = network_monitor or RuntimeNetworkMonitor()
         self.sovereignty_checker = SovereigntyChecker(self.network_monitor)
         self.ocr_engine = ocr_engine or LocalOCREngine(provider=MockOCRProvider())
+        self.vision_engine = vision_engine or VisionEngine(
+            provider=ModelManagerVisionProvider(self.model_manager)
+        )
 
         # Agent orchestrator with audit service injection
         self.agent_orchestrator = agent_orchestrator or AgentStateMachineOrchestrator(
@@ -234,21 +243,83 @@ class CorrosionAuditWorkflow:
                     source_sha256=doc_summary.get("sha256", "mock_sha"),
                     page_number=1,
                 )
-                img = Image.new("RGB", (300, 150), color=(255, 255, 255))
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                img_bytes = buf.getvalue()
 
-                ocr_res = await self.ocr_engine.extract_from_image(img_bytes, provenance=prov)
-                ocr_summary = {
-                    "engine_name": ocr_res.engine_name,
-                    "total_tokens": len(ocr_res.tokens),
-                    "confidence_avg": round(ocr_res.mean_confidence, 3),
-                    "status": ocr_res.status,
-                    "degraded": False,
-                }
-                st_vision.status = StageStatus.SUCCESS
+                if request.execution_mode == WorkflowExecutionMode.LIVE:
+                    # LIVE MODE: Enforce Ollama / ModelManager health (fail closed, no silent mock fallback)
+                    is_healthy = await self.model_manager.health_check()
+                    if not is_healthy:
+                        raise IntegrationError(
+                            "Local inference provider (Ollama) is unreachable for LIVE execution mode. Fail closed.",
+                            stage="ocr_vision_analysis",
+                        )
+
+                    # Determine image bytes for visual analysis
+                    img_bytes: Optional[bytes] = None
+                    if pdf_bytes and any(filename.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg")):
+                        img_bytes = pdf_bytes
+                    else:
+                        pid_sample_path = self.settings.project_root / "data" / "samples" / "pid_sample.png"
+                        if pid_sample_path.is_file():
+                            img_bytes = pid_sample_path.read_bytes()
+                        else:
+                            img = Image.new("RGB", (400, 300), color=(255, 255, 255))
+                            buf = io.BytesIO()
+                            img.save(buf, format="PNG")
+                            img_bytes = buf.getvalue()
+
+                    # Execute real VLM inference via ModelManager abstraction
+                    vlm_res = await self.vision_engine.analyze_schematic(img_bytes, provenance=prov)
+
+                    ocr_summary = {
+                        "engine_name": "local_vlm",
+                        "model_used": vlm_res.model_used,
+                        "provider": "ollama",
+                        "findings_count": len(vlm_res.findings),
+                        "equipment_tags": vlm_res.equipment_tags,
+                        "instrument_tags": vlm_res.instrument_tags,
+                        "summary": vlm_res.summary,
+                        "status": vlm_res.status,
+                        "degraded": False,
+                    }
+                    self._safe_audit(
+                        AuditEventType.MODEL_INVOKED,
+                        action=f"Live VLM inference executed via ModelManager ({vlm_res.model_used})",
+                        task_id=task_id,
+                        model_role="vision",
+                        metadata={
+                            "model": vlm_res.model_used,
+                            "findings_count": len(vlm_res.findings),
+                            "equipment_tags": vlm_res.equipment_tags,
+                            "instrument_tags": vlm_res.instrument_tags,
+                        },
+                    )
+                    st_vision.status = StageStatus.SUCCESS
+                else:
+                    img = Image.new("RGB", (300, 150), color=(255, 255, 255))
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    img_bytes = buf.getvalue()
+
+                    ocr_res = await self.ocr_engine.extract_from_image(img_bytes, provenance=prov)
+                    ocr_summary = {
+                        "engine_name": ocr_res.engine_name,
+                        "total_tokens": len(ocr_res.tokens),
+                        "confidence_avg": round(ocr_res.mean_confidence, 3),
+                        "status": ocr_res.status,
+                        "degraded": False,
+                    }
+                    st_vision.status = StageStatus.SUCCESS
+            except IntegrationError:
+                st_vision.status = StageStatus.FAILED
+                raise
             except (OCREngineUnavailableError, VisionError, Exception) as vision_err:
+                if request.execution_mode == WorkflowExecutionMode.LIVE:
+                    st_vision.status = StageStatus.FAILED
+                    st_vision.error = str(vision_err)
+                    raise IntegrationError(
+                        f"Live VLM execution failed: {str(vision_err)}",
+                        stage="ocr_vision_analysis",
+                    ) from vision_err
                 logger.warning("Vision/OCR operating in degraded mode: %s", str(vision_err))
                 ocr_summary = {
                     "engine_name": "none",
@@ -310,6 +381,7 @@ class CorrosionAuditWorkflow:
             role_key = route_decision.model_role.value if hasattr(route_decision.model_role, "value") else str(route_decision.model_role)
             mapped_role = "reasoning" if "reason" in role_key.lower() else ("router" if "fast" in role_key.lower() else "reasoning")
             model_entry = tier_config.get_model(mapped_role) or tier_config.get_model("reasoning")
+            vision_entry = tier_config.get_model("vision")
 
             try:
                 available_models = await self.model_manager.list_models()
@@ -321,6 +393,8 @@ class CorrosionAuditWorkflow:
                 "assigned_role": role_key,
                 "tier_role": mapped_role,
                 "assigned_model_tag": model_entry.model_tag if model_entry else "default_reasoning",
+                "vision_model_tag": vision_entry.model_tag if vision_entry else "qwen2.5vl:3b",
+                "provider": "ollama" if request.execution_mode == WorkflowExecutionMode.LIVE else "mock",
                 "available_models_count": models_count,
                 "is_mock": True if request.execution_mode == WorkflowExecutionMode.DETERMINISTIC else False,
             }

@@ -49,6 +49,7 @@ frontend/.vite/
 *.tar.gz
 models/weights/
 models/cache/
+Training Dataset/
 
 # Runtime Logs & Temp Files
 logs/*.log

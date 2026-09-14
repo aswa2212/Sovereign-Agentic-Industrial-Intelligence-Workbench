@@ -26,7 +26,7 @@ tiers:
       quantization: "Q4_K_M"
     vision:
       provider: "ollama"
-      model_tag: "qwen2.5-vl:3b"
+      model_tag: "qwen2.5vl:3b"
       context_window: 4096
       quantization: "Q4_K_M"
     embedding:

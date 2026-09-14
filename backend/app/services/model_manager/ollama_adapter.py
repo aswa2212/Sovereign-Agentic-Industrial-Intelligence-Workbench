@@ -117,20 +117,42 @@ class OllamaAdapter(InferenceBackend):
             logger.error("Unexpected error listing Ollama models: %s", exc, exc_info=True)
             return []
 
+    async def _resolve_model_tag(self, requested_id: str) -> str:
+        """
+        Verify and resolve requested model tag against Ollama's actual available models.
+        Handles hyphenation/naming aliases (e.g. 'qwen2.5-vl:3b' vs 'qwen2.5vl:3b').
+        """
+        try:
+            models = await self.list_available_models()
+            available_tags = [m.tag for m in models]
+            if requested_id in available_tags:
+                return requested_id
+            req_norm = requested_id.lower().replace("-", "").replace("_", "")
+            for tag in available_tags:
+                tag_norm = tag.lower().replace("-", "").replace("_", "")
+                if tag_norm == req_norm or tag_norm.split(":")[0] == req_norm.split(":")[0]:
+                    if ":" not in requested_id or tag.endswith(requested_id.split(":")[-1]):
+                        logger.info("Resolved model alias '%s' -> '%s' from local Ollama catalogue", requested_id, tag)
+                        return tag
+        except Exception as exc:
+            logger.debug("Ollama model resolution fallback to '%s': %s", requested_id, exc)
+        return requested_id
+
     async def load_model(self, model_id: str) -> bool:
         """
         Pre-warm a model in Ollama by sending an empty generate request.
         Ollama will pull the model into VRAM if not already resident.
         Returns True on success, False if Ollama is unreachable or the model is unknown.
         """
+        resolved_id = await self._resolve_model_tag(model_id)
         try:
             resp = await self._client.post(
                 "/api/generate",
-                json={"model": model_id, "prompt": "", "stream": False},
+                json={"model": resolved_id, "prompt": "", "stream": False},
             )
             return resp.status_code == 200
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            logger.warning("Ollama not reachable for load_model('%s'): %s", model_id, exc)
+            logger.warning("Ollama not reachable for load_model('%s'): %s", resolved_id, exc)
             return False
 
     async def unload_model(self, model_id: str) -> bool:
@@ -138,11 +160,12 @@ class OllamaAdapter(InferenceBackend):
         Signal Ollama to evict a model from VRAM by setting keep_alive to 0.
         This is advisory — Ollama may choose to keep the model resident.
         """
+        resolved_id = await self._resolve_model_tag(model_id)
         try:
             resp = await self._client.post(
                 "/api/generate",
                 json={
-                    "model": model_id,
+                    "model": resolved_id,
                     "prompt": "",
                     "stream": False,
                     "keep_alive": "0",
@@ -150,7 +173,7 @@ class OllamaAdapter(InferenceBackend):
             )
             return resp.status_code == 200
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            logger.warning("Ollama not reachable for unload_model('%s'): %s", model_id, exc)
+            logger.warning("Ollama not reachable for unload_model('%s'): %s", resolved_id, exc)
             return False
 
     async def generate(
@@ -163,16 +186,20 @@ class OllamaAdapter(InferenceBackend):
     ) -> str:
         """
         Send a non-streaming generate request to Ollama.
+        Supports multimodal image input via kwargs['images'] (base64-encoded strings).
         Raises httpx.HTTPStatusError on non-2xx responses.
         """
+        resolved_id = await self._resolve_model_tag(model_id)
         payload: Dict[str, Any] = {
-            "model": model_id,
+            "model": resolved_id,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": temperature},
         }
         if system_prompt:
             payload["system"] = system_prompt
+        if "images" in kwargs and kwargs["images"]:
+            payload["images"] = kwargs["images"]
 
         resp = await self._client.post("/api/generate", json=payload)
         resp.raise_for_status()
@@ -188,10 +215,12 @@ class OllamaAdapter(InferenceBackend):
     ) -> Dict[str, Any]:
         """
         Request JSON-mode generation from Ollama (format=json).
+        Supports multimodal image input via kwargs['images'] (base64-encoded strings).
         If the response is not valid JSON, raises ValueError.
         """
+        resolved_id = await self._resolve_model_tag(model_id)
         payload: Dict[str, Any] = {
-            "model": model_id,
+            "model": resolved_id,
             "prompt": prompt,
             "stream": False,
             "format": "json",
@@ -199,6 +228,8 @@ class OllamaAdapter(InferenceBackend):
         }
         if system_prompt:
             payload["system"] = system_prompt
+        if "images" in kwargs and kwargs["images"]:
+            payload["images"] = kwargs["images"]
 
         resp = await self._client.post("/api/generate", json=payload)
         resp.raise_for_status()
@@ -208,7 +239,7 @@ class OllamaAdapter(InferenceBackend):
             return json.loads(raw_text)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"Ollama returned non-JSON response for model '{model_id}': {raw_text[:200]}"
+                f"Ollama returned non-JSON response for model '{resolved_id}': {raw_text[:200]}"
             ) from exc
 
     async def health_check(self) -> bool:

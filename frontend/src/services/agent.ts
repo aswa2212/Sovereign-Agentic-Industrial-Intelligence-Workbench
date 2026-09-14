@@ -39,4 +39,18 @@ export const agentService = {
       body: JSON.stringify({ task: task.trim() }),
     });
   },
+
+  /**
+   * Execute full North-Star integration workflow with explicit execution mode.
+   */
+  async runWorkflow(objective: string, mode: 'deterministic' | 'live' = 'deterministic', componentId = 'C-101'): Promise<any> {
+    const formData = new FormData();
+    formData.append('objective', objective);
+    formData.append('mode', mode);
+    formData.append('component_id', componentId);
+    return request<any>('/workflows/corrosion-audit', {
+      method: 'POST',
+      body: formData,
+    }, 120000);
+  },
 };

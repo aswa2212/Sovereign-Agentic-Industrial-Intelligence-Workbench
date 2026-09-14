@@ -136,6 +136,10 @@ class ModelManager:
         """Return live backend health status."""
         return await self._backend.health_check()
 
+    async def health_check(self) -> bool:
+        """Alias for is_backend_healthy returning live backend health status."""
+        return await self._backend.health_check()
+
     async def list_models(self) -> List[ModelInfo]:
         """Return all models the backend reports as available."""
         return await self._backend.list_available_models()

@@ -6,6 +6,7 @@ import { DeliverablesPanel } from '../components/DeliverablesPanel';
 import { DocumentViewer } from '../components/DocumentViewer';
 import { DocumentIngestionResult } from '../types/documents';
 import { GeneratedArtifact } from '../types/deliverables';
+import { systemService } from '../services/system';
 import {
   Play,
   RotateCcw,
@@ -16,6 +17,7 @@ import {
   FileText,
   Clock,
   Sliders,
+  Zap,
 } from 'lucide-react';
 
 const PRESET_TASKS = [
@@ -58,6 +60,9 @@ export const WorkbenchPage: React.FC = () => {
   const [taskInput, setTaskInput] = useState(PRESET_TASKS[0].query);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(PRESET_TASKS[0].equipmentId);
   const [maxSteps, setMaxSteps] = useState(8);
+  const [executionMode, setExecutionMode] = useState<'deterministic' | 'live'>('deterministic');
+  const [configuredVisionModel, setConfiguredVisionModel] = useState<string>('');
+  const [configuredProvider, setConfiguredProvider] = useState<string>('Ollama');
   const [artifacts, setArtifacts] = useState<GeneratedArtifact[]>([]);
   const [showDocSelector, setShowDocSelector] = useState(false);
 
@@ -86,6 +91,25 @@ export const WorkbenchPage: React.FC = () => {
   ]);
   const [selectedDoc, setSelectedDoc] = useState<DocumentIngestionResult>(documents[0]);
 
+  // Dynamically load active configured vision model from backend/config
+  useEffect(() => {
+    systemService
+      .getModelTier()
+      .then((tier) => {
+        const vModel = tier?.models?.find((m: any) => m.role === 'vision');
+        if (vModel) {
+          setConfiguredVisionModel(vModel.model_tag);
+          if (vModel.provider) {
+            setConfiguredProvider(vModel.provider === 'ollama' ? 'Ollama' : vModel.provider);
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback default from tier config
+        setConfiguredVisionModel('qwen2.5vl:3b');
+      });
+  }, []);
+
   // Trigger route preview when query changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -105,8 +129,7 @@ export const WorkbenchPage: React.FC = () => {
   const handleStartTask = async () => {
     if (!taskInput.trim() || isRunning) return;
     setArtifacts([]);
-    const res = await executeTask(taskInput, maxSteps);
-    // If response succeeded, we can pre-populate default deliverables or let user generate them
+    await executeTask(taskInput, maxSteps, executionMode, selectedEquipmentId);
   };
 
   const handleArtifactsGenerated = (newArtifacts: GeneratedArtifact[]) => {
@@ -251,8 +274,29 @@ export const WorkbenchPage: React.FC = () => {
             </div>
 
             {/* Execution Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginRight: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginRight: '0.375rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mode:</span>
+                <select
+                  value={executionMode}
+                  onChange={(e) => setExecutionMode(e.target.value as 'deterministic' | 'live')}
+                  disabled={isRunning}
+                  style={{
+                    fontSize: '0.75rem',
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-medium)',
+                    backgroundColor: executionMode === 'live' ? 'rgba(37, 99, 235, 0.12)' : 'var(--bg-surface)',
+                    color: executionMode === 'live' ? 'var(--accent-primary)' : 'inherit',
+                    fontWeight: executionMode === 'live' ? 600 : 400,
+                  }}
+                >
+                  <option value="deterministic">Deterministic</option>
+                  <option value="live">Live Local Model</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginRight: '0.375rem' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Max Steps:</span>
                 <select
                   value={maxSteps}
@@ -301,6 +345,42 @@ export const WorkbenchPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Dynamic Live Local Model Banner when Live mode is active */}
+          {executionMode === 'live' && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.5rem 0.875rem',
+                background: 'rgba(37, 99, 235, 0.08)',
+                border: '1px solid rgba(37, 99, 235, 0.25)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8125rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <CheckCircle2 size={14} style={{ color: 'var(--status-success-dot)' }} />
+                  <span style={{ fontWeight: 700, color: 'var(--accent-primary)', letterSpacing: '0.02em' }}>
+                    LIVE LOCAL MODEL
+                  </span>
+                </div>
+                <span style={{ color: 'var(--text-muted)' }}>•</span>
+                <span>
+                  Provider: <strong>{configuredProvider}</strong>
+                </span>
+                <span style={{ color: 'var(--text-muted)' }}>•</span>
+                <span>
+                  Model: <strong>{configuredVisionModel || 'Configured VLM'}</strong>
+                </span>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                127.0.0.1 (On-Prem Sovereign)
+              </span>
+            </div>
+          )}
 
           {errorMessage && (
             <div
