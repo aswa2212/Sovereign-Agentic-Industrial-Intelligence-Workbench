@@ -170,8 +170,13 @@ async def run_north_star_demo(
     # Routing & Model Allocation
     route = result.routing_decision or {}
     alloc = result.model_allocation or {}
+    active_model = (
+        alloc.get("vision_model_tag")
+        if (route.get("model_role") == "vision" or route.get("task_type") == "vision")
+        else alloc.get("assigned_model_tag")
+    )
     print(f"\nTask Route  : {route.get('task_type')} -> Role: {route.get('model_role')} (Confidence: {route.get('confidence')})")
-    print(f"Model Slot  : {alloc.get('assigned_model_tag')} (Provider: {alloc.get('provider')})")
+    print(f"Model Slot  : {active_model} (Provider: {alloc.get('provider')})")
 
     # Agent Lifecycle & Sandboxed Engineering Math
     calc = result.calculation_result or {}
@@ -187,8 +192,19 @@ async def run_north_star_demo(
     val_status = "PASS" if val.get("valid") and val.get("status") == "VALID" else "FAIL"
     print(f"\nVALIDATION  : {val_status} ({len(val.get('checks_passed', []))} checks verified, {len(val.get('checks_failed', []))} failed)")
 
+    # RAG Knowledge Evidence
+    print(f"\nKNOWLEDGE RETRIEVAL (Sovereign RAG — Controlled Demonstration Corpus):")
+    if result.rag_citations:
+        for c_idx, c in enumerate(result.rag_citations, 1):
+            src = c.get("source_document", "unknown")
+            page = c.get("page_number", 1)
+            score = c.get("similarity_score", 0.0)
+            print(f"  [{c_idx}] Doc: {src} (p.{page}, similarity: {score:.4f})")
+    else:
+        print("  - [NONE] No matching knowledge retrieved")
+
     # Deliverables
-    print("DELIVERABLES:")
+    print("\nDELIVERABLES:")
     if result.deliverables:
         for d in result.deliverables:
             print(f"  - [{d.format.upper()}] {d.filename} ({d.file_size_bytes:,} bytes, SHA-256: {d.sha256[:12]}...)")

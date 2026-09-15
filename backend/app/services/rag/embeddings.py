@@ -11,10 +11,13 @@ import logging
 import math
 import re
 from typing import Any, List, Optional
+import httpx
 
 try:
+    from app.core.config import get_settings
     from app.services.rag.base import EmbeddingModelUnavailableError, EmbeddingProvider
 except ImportError:
+    from backend.app.core.config import get_settings
     from backend.app.services.rag.base import EmbeddingModelUnavailableError, EmbeddingProvider
 
 logger = logging.getLogger(__name__)
@@ -208,3 +211,90 @@ class ModelManagerEmbeddingProvider(EmbeddingProvider):
             )
         provider = MockEmbeddingProvider(dim=self._dim)
         return await provider.embed_texts(texts)
+
+
+class OllamaEmbeddingProvider(EmbeddingProvider):
+    """
+    Local Ollama dense embedding engine.
+    Uses nomic-embed-text (768 dimensions) served on sovereign loopback (127.0.0.1:11434).
+    Zero cloud connectivity.
+    Strictly fails closed if Ollama or nomic-embed-text is not reachable.
+    """
+
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        model_name: str = "nomic-embed-text:latest",
+        dim: int = 768,
+        timeout_seconds: float = 30.0,
+    ) -> None:
+        settings = get_settings()
+        raw_url = base_url or getattr(settings, "ollama_base_url", "http://127.0.0.1:11434")
+        if not any(
+            raw_url.startswith(p)
+            for p in ("http://127.0.0.1", "http://localhost", "http://[::1]")
+        ):
+            raise ValueError(
+                f"OllamaEmbeddingProvider base_url '{raw_url}' points outside loopback. "
+                "Air-gap sovereignty requires Ollama on 127.0.0.1."
+            )
+        self._base_url = raw_url.rstrip("/")
+        self._model_tag = model_name
+        self._dim = dim
+        self._timeout = timeout_seconds
+
+    def dimension(self) -> int:
+        return self._dim
+
+    def is_available(self) -> bool:
+        """Synchronously check if Ollama is reachable on loopback and has the embedding model."""
+        try:
+            with httpx.Client(timeout=3.0) as client:
+                resp = client.get(f"{self._base_url}/api/tags")
+                if resp.status_code == 200:
+                    models = resp.json().get("models", [])
+                    tag_names = [m.get("name", "") for m in models]
+                    base_tag = self._model_tag.split(":")[0]
+                    return any(base_tag in name for name in tag_names)
+        except Exception:
+            return False
+        return False
+
+    def model_name(self) -> str:
+        return self._model_tag
+
+    async def embed_text(self, text: str) -> List[float]:
+        """Embed a single text string using local Ollama nomic-embed-text."""
+        if not text:
+            return [0.0] * self._dim
+
+        url = f"{self._base_url}/api/embeddings"
+        payload = {"model": self._model_tag, "prompt": text}
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code != 200:
+                    raise EmbeddingModelUnavailableError(
+                        f"Real local embedding model unavailable: Ollama returned status {resp.status_code}: {resp.text}"
+                    )
+                data = resp.json()
+                embedding = data.get("embedding")
+                if not embedding or len(embedding) != self._dim:
+                    raise EmbeddingModelUnavailableError(
+                        f"Real local embedding model returned unexpected dimension: {len(embedding) if embedding else 0}, expected {self._dim}"
+                    )
+                return _normalize_vector(embedding)
+        except httpx.RequestError as exc:
+            raise EmbeddingModelUnavailableError(
+                f"Real local embedding model unavailable: Cannot connect to Ollama at {self._base_url}. Error: {exc}"
+            ) from exc
+
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        """Batch embedding generation across texts."""
+        embeddings: List[List[float]] = []
+        for text in texts:
+            emb = await self.embed_text(text)
+            embeddings.append(emb)
+        return embeddings
+

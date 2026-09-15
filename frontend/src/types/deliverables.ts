@@ -1,5 +1,6 @@
 /**
- * Deterministic Deliverables types.
+ * SIH26117 — Deterministic Deliverables Types
+ * Source of Truth: SIH26117_MASTER_PROJECT_REPORT.md §6.2.B
  */
 
 export type DeliverableFormat = 'docx' | 'xlsx' | 'pptx';
@@ -9,9 +10,12 @@ export interface GeneratedArtifact {
   format: DeliverableFormat;
   filename: string;
   file_size_bytes: number;
-  storage_path: string;
+  relative_path?: string;
+  storage_path?: string;
+  sha256_hash: string;
   sha256_checksum?: string;
   created_at: string;
+  download_url?: string;
 }
 
 export interface DeliverableGenerateResponse {

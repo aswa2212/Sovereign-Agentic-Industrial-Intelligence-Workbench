@@ -379,7 +379,11 @@ class CorrosionAuditWorkflow:
 
             tier_config = self.model_manager.get_tier_config()
             role_key = route_decision.model_role.value if hasattr(route_decision.model_role, "value") else str(route_decision.model_role)
-            mapped_role = "reasoning" if "reason" in role_key.lower() else ("router" if "fast" in role_key.lower() else "reasoning")
+            mapped_role = (
+                "vision" if "vision" in role_key.lower()
+                else ("reasoning" if "reason" in role_key.lower()
+                else ("router" if "fast" in role_key.lower() else "reasoning"))
+            )
             model_entry = tier_config.get_model(mapped_role) or tier_config.get_model("reasoning")
             vision_entry = tier_config.get_model("vision")
 

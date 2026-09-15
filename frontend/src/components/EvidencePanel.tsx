@@ -1,225 +1,193 @@
 import React, { useState } from 'react';
-import { CitationSource } from '../types/agent';
-import { BookOpen, FileText, ChevronDown, ChevronUp, ShieldCheck, Search } from 'lucide-react';
+import { CitationSource, StructuredValidationReport } from '../types/agent';
+import { RouteResponse } from '../types/api';
+import { BookOpen, FileText, ChevronDown, ChevronUp, ShieldCheck, Search, Cpu, CheckCircle2 } from 'lucide-react';
+import { ValidationGateFuseBox } from './ValidationGateFuseBox';
+import { DataSourceBadge } from './DataSourceBadge';
 
 interface EvidencePanelProps {
   citations: CitationSource[];
   summary?: string | null;
+  routePreview?: RouteResponse | null;
+  validationReport?: StructuredValidationReport | null;
+  isRunning?: boolean;
+  executionMode?: 'deterministic' | 'live';
 }
 
-export const EvidencePanel: React.FC<EvidencePanelProps> = ({ citations, summary }) => {
+export const EvidencePanel: React.FC<EvidencePanelProps> = ({
+  citations,
+  summary,
+  routePreview,
+  validationReport,
+  isRunning = false,
+  executionMode = 'deterministic',
+}) => {
   const [expandedChunk, setExpandedChunk] = useState<string | null>(
-    citations.length > 0 ? citations[0].chunk_id : null
+    citations.length > 0 ? (citations[0].chunk_id || 'chk-0') : null
   );
   const [filterText, setFilterText] = useState('');
+
+  const isLive = executionMode === 'live';
+  const hasCitations = citations.length > 0;
 
   const filtered = citations.filter(
     (c) =>
       c.source_document.toLowerCase().includes(filterText.toLowerCase()) ||
       c.text.toLowerCase().includes(filterText.toLowerCase()) ||
-      c.chunk_id.toLowerCase().includes(filterText.toLowerCase())
+      (c.chunk_id && c.chunk_id.toLowerCase().includes(filterText.toLowerCase()))
   );
 
   return (
-    <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="card-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <BookOpen size={16} style={{ color: 'var(--accent-primary)' }} />
+    <div className="workbench-panel evidence-panel">
+      {/* Panel Header */}
+      <div className="panel-header">
+        <div className="panel-header-title-group">
+          <BookOpen size={16} className="panel-header-icon" />
           <div>
-            <div className="card-title">Retrieved Knowledge & Evidence Chain</div>
-            <div className="card-subtitle">
-              Verified Citations • Sovereign RAG Vector Store
-            </div>
+            <h2 className="panel-title">Evidence &amp; Invariants</h2>
+            <span className="panel-subtitle">Gatekeeper &amp; RAG Citations</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span className="badge badge-success">
-            <ShieldCheck size={12} style={{ marginRight: '4px' }} />
-            {citations.length} Grounded Source{citations.length === 1 ? '' : 's'}
-          </span>
+        <div className="panel-header-badges">
+          <DataSourceBadge
+            source={hasCitations ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
+            label={hasCitations ? (isLive ? 'LIVE LOCAL CORPUS' : 'DEMO — SYNTHETIC CORPUS') : 'NO EVIDENCE LOADED'}
+          />
         </div>
       </div>
 
-      {/* Industrial Trust Summary Banner */}
-      {summary && (
-        <div
-          style={{
-            padding: '0.75rem 1rem',
-            background: 'var(--bg-surface-muted)',
-            borderBottom: '1px solid var(--border-subtle)',
-            fontSize: '0.8125rem',
-            color: 'var(--text-secondary)',
-            lineHeight: 1.5,
-          }}
-        >
-          <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginRight: '6px' }}>
-            SYNTHESIS FINDING:
-          </span>
-          {summary}
-        </div>
-      )}
-
-      {/* Search & Filter */}
-      {citations.length > 3 && (
-        <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div style={{ position: 'relative' }}>
-            <Search
-              size={13}
-              style={{ position: 'absolute', left: '8px', top: '9px', color: 'var(--text-muted)' }}
-            />
-            <input
-              type="text"
-              placeholder="Filter evidence snippets by keyword or source..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="form-input"
-              style={{ paddingLeft: '28px', fontSize: '0.8125rem' }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Citations List */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1rem' }}>
-        {citations.length === 0 ? (
-          <div
-            style={{
-              padding: '2.5rem 1rem',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: '0.8125rem',
-            }}
-          >
-            <BookOpen size={28} style={{ margin: '0 auto 0.5rem', opacity: 0.4 }} />
-            <div>No retrieved citations for current state.</div>
-            <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-              Evidence retrieved during agent EXECUTE step will be grounded with exact source and page numbers.
+      <div className="panel-body-scroll">
+        {/* Real-time Intent Routing Card */}
+        {routePreview && (
+          <div className="evidence-card route-evidence-card">
+            <div className="evidence-card-header">
+              <div className="card-header-left">
+                <Cpu size={14} className="accent-icon" />
+                <span className="card-heading">TASK INTENT ROUTER (LEVEL 0)</span>
+              </div>
+              <span className="badge-pill badge-neutral">
+                {Math.round((routePreview.confidence ?? 0.98) * 100)}% CONFIDENCE
+              </span>
             </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {filtered.map((citation, index) => {
-              const isExpanded = expandedChunk === citation.chunk_id;
-              const relevancePercent = citation.similarity_score
-                ? Math.round(citation.similarity_score * 100)
-                : null;
 
-              return (
-                <div
-                  key={`${citation.chunk_id}-${index}`}
-                  className="card"
-                  style={{
-                    border: '1px solid var(--border-subtle)',
-                    background: 'var(--bg-surface)',
-                    boxShadow: 'var(--shadow-sm)',
-                  }}
-                >
-                  <div
-                    onClick={() => setExpandedChunk(isExpanded ? null : citation.chunk_id)}
-                    style={{
-                      padding: '0.625rem 0.875rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      background: isExpanded ? 'var(--bg-surface-muted)' : 'var(--bg-surface)',
-                      borderBottom: isExpanded ? '1px solid var(--border-subtle)' : 'none',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-                      <FileText size={14} style={{ color: 'var(--accent-secondary)', flexShrink: 0 }} />
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: '0.8125rem',
-                            fontWeight: 600,
-                            color: 'var(--text-primary)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {citation.source_document}
-                        </div>
-                      </div>
-                    </div>
+            <div className="route-attributes-grid">
+              <div className="route-attr">
+                <span className="attr-label">TASK TYPE:</span>
+                <code className="attr-value">{routePreview.task_type || 'corrosion_audit'}</code>
+              </div>
+              <div className="route-attr">
+                <span className="attr-label">TARGET CAPABILITY:</span>
+                <code className="attr-value">{routePreview.capability || 'engineering_math'}</code>
+              </div>
+              <div className="route-attr">
+                <span className="attr-label">ALLOCATED ROLE:</span>
+                <code className="attr-value">{routePreview.model_role || 'reasoning'}</code>
+              </div>
+            </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                      <span className="code-badge">P. {citation.page_number}</span>
-                      <span className="code-badge">{citation.chunk_id}</span>
-                      {relevancePercent !== null && (
-                        <span
-                          className="badge"
-                          style={{
-                            background: '#eff6ff',
-                            color: '#1e40af',
-                            border: '1px solid #bfdbfe',
-                            fontSize: '0.7rem',
-                            padding: '2px 6px',
-                          }}
-                          title="Vector cosine similarity score against task embedding"
-                        >
-                          {relevancePercent}% MATCH
-                        </span>
-                      )}
-                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div style={{ padding: '0.75rem 0.875rem', fontSize: '0.8125rem' }}>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                          gap: '0.5rem',
-                          marginBottom: '0.625rem',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-muted)',
-                        }}
-                      >
-                        <div>
-                          <span style={{ fontWeight: 600 }}>SOURCE:</span> {citation.source_document}
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>PAGE:</span> {citation.page_number}
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>CHUNK:</span>{' '}
-                          <span style={{ fontFamily: 'var(--font-mono)' }}>{citation.chunk_id}</span>
-                        </div>
-                        {citation.similarity_score && (
-                          <div>
-                            <span style={{ fontWeight: 600 }}>SIMILARITY:</span>{' '}
-                            {citation.similarity_score.toFixed(4)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div
-                        style={{
-                          background: 'var(--bg-surface-muted)',
-                          padding: '0.625rem 0.75rem',
-                          borderRadius: 'var(--radius-sm)',
-                          borderLeft: '3px solid var(--accent-primary)',
-                          fontFamily: 'inherit',
-                          lineHeight: 1.5,
-                          color: 'var(--text-secondary)',
-                          whiteSpace: 'pre-wrap',
-                          maxHeight: '180px',
-                          overflowY: 'auto',
-                        }}
-                      >
-                        {citation.text}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {routePreview.reason && (
+              <div className="route-reason-row">
+                <span className="reason-label">MATCHED RULE:</span>
+                <span className="reason-text">{routePreview.reason}</span>
+              </div>
+            )}
           </div>
         )}
+
+        {/* 12-Cell Status Grid (Fuse Box) */}
+        <ValidationGateFuseBox report={validationReport} isRunning={isRunning} />
+
+        {/* Sovereign RAG Citations Section */}
+        <div className="evidence-card rag-citations-card">
+          <div className="evidence-card-header">
+            <div className="card-header-left">
+              <FileText size={14} className="accent-icon" />
+              <span className="card-heading">SOVEREIGN RAG CITATIONS ({citations.length})</span>
+            </div>
+            <span className="subtle-note">Dense Vector Match (Nomic 768-d)</span>
+          </div>
+
+          {citations.length > 2 && (
+            <div className="citations-search-wrap">
+              <Search size={13} className="search-icon-pos" />
+              <input
+                type="text"
+                placeholder="Filter retrieved citations by keyword or section..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="citations-search-input"
+              />
+            </div>
+          )}
+
+          {citations.length === 0 ? (
+            <div className="empty-panel-state">
+              <BookOpen size={24} className="empty-icon" />
+              <div className="empty-title">No Citations Loaded Yet</div>
+              <div className="empty-desc">
+                Submit a task to trigger dense semantic retrieval over local MRPL standard operating procedures.
+              </div>
+            </div>
+          ) : (
+            <div className="citations-list">
+              {filtered.map((citation, index) => {
+                const chunkKey = citation.chunk_id || `chk-${index}`;
+                const isExpanded = expandedChunk === chunkKey;
+                const matchPct = citation.similarity_score
+                  ? Math.round(citation.similarity_score * 100)
+                  : null;
+
+                return (
+                  <div key={chunkKey} className={`citation-card ${isExpanded ? 'is-expanded' : ''}`}>
+                    <div
+                      className="citation-card-summary"
+                      onClick={() => setExpandedChunk(isExpanded ? null : chunkKey)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="citation-summary-left">
+                        <span className="citation-provenance-ribbon">
+                          P.{citation.page_number}
+                        </span>
+                        <span className="citation-source-doc">{citation.source_document}</span>
+                      </div>
+
+                      <div className="citation-summary-right">
+                        {matchPct !== null && (
+                          <span className="citation-match-tag">{matchPct}% MATCH</span>
+                        )}
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="citation-card-detail">
+                        <div className="citation-meta-tags">
+                          <span><strong>Document:</strong> {citation.source_document}</span>
+                          <span><strong>Page:</strong> {citation.page_number}</span>
+                          {citation.chunk_id && (
+                            <span><strong>Chunk ID:</strong> <code>{citation.chunk_id}</code></span>
+                          )}
+                          {citation.similarity_score !== undefined && citation.similarity_score !== null && (
+                            <span><strong>Cosine Score:</strong> <code>{typeof citation.similarity_score === 'number' ? citation.similarity_score.toFixed(4) : citation.similarity_score}</code></span>
+                          )}
+                          <span className="badge-pill badge-success">
+                            <CheckCircle2 size={10} />
+                            <span>PROVENANCE: LOCAL ON-PREM CORPUS</span>
+                          </span>
+                        </div>
+                        <div className="citation-quote-box">
+                          &ldquo;{citation.text}&rdquo;
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

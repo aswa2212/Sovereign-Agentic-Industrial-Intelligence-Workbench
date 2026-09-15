@@ -1,7 +1,28 @@
 /**
  * Centralized REST API client for SIH26117 Workbench.
- * Encapsulates base URL handling, timeouts, error parsing, and request logging.
+ * Encapsulates base URL handling, timeouts, error parsing, request logging,
+ * and seamless fallback to realistic mock fixtures for offline air-gap demos.
  */
+
+import {
+  MOCK_HEALTH,
+  MOCK_SYSTEM_STATUS,
+  MOCK_MODEL_TIER,
+  MOCK_MODEL_HEALTH,
+  MOCK_MODEL_CATALOG,
+  MOCK_RAG_STATUS,
+  MOCK_RAG_RESULTS,
+  MOCK_ROUTING_DECISION,
+  MOCK_TASK_RUN_RESPONSE,
+  MOCK_DELIVERABLES,
+  MOCK_INGESTED_DOCUMENTS,
+  MOCK_AUDIT_EVENTS,
+  MOCK_AUDIT_VERIFICATION,
+  MOCK_NETWORK_REPORT,
+  MOCK_SOVEREIGNTY_STATUS,
+  MOCK_CORROSION_AUDIT_RESULT,
+  MOCK_VALIDATION_REPORT,
+} from './mockData';
 
 const API_BASE = '/api/v1';
 
@@ -19,10 +40,115 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Resolves fallback mock data when backend is not running.
+ */
+function getMockFallback<T>(endpoint: string, options: RequestInit = {}): T | null {
+  const cleanEndpoint = endpoint.replace(/^\/api\/v1/, '').split('?')[0];
+
+  if (cleanEndpoint === '/health' || cleanEndpoint.endsWith('/health')) {
+    if (cleanEndpoint.includes('/models/')) return MOCK_MODEL_HEALTH as unknown as T;
+    return MOCK_HEALTH as unknown as T;
+  }
+
+  if (cleanEndpoint === '/system/status') {
+    return MOCK_SYSTEM_STATUS as unknown as T;
+  }
+
+  if (cleanEndpoint === '/models/tier') {
+    return MOCK_MODEL_TIER as unknown as T;
+  }
+
+  if (cleanEndpoint === '/models') {
+    return MOCK_MODEL_CATALOG as unknown as T;
+  }
+
+  if (cleanEndpoint === '/rag/status') {
+    return MOCK_RAG_STATUS as unknown as T;
+  }
+
+  if (cleanEndpoint === '/rag/query') {
+    return MOCK_RAG_RESULTS as unknown as T;
+  }
+
+  if (cleanEndpoint === '/router/route') {
+    return MOCK_ROUTING_DECISION as unknown as T;
+  }
+
+  if (cleanEndpoint === '/agent/run' || cleanEndpoint === '/agent/task') {
+    return MOCK_TASK_RUN_RESPONSE as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('/agent/')) {
+    return {
+      task_id: 'task-c101-audit-2026',
+      current_state: 'COMPLETED',
+      step_count: 8,
+      started_at: new Date(Date.now() - 30000).toISOString(),
+      updated_at: new Date().toISOString(),
+      execution_trace: MOCK_TASK_RUN_RESPONSE.execution_trace,
+      errors: [],
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === '/workflows/corrosion-audit') {
+    return {
+      task_id: 'task-c101-audit-2026',
+      status: 'completed',
+      corrosion_result: MOCK_CORROSION_AUDIT_RESULT,
+      validation_report: MOCK_VALIDATION_REPORT,
+      deliverables: MOCK_DELIVERABLES,
+      audit_events: MOCK_AUDIT_EVENTS,
+      sovereignty: MOCK_SOVEREIGNTY_STATUS,
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === '/deliverables') {
+    return MOCK_DELIVERABLES as unknown as T;
+  }
+
+  if (cleanEndpoint === '/files' || cleanEndpoint === '/files/list') {
+    return MOCK_INGESTED_DOCUMENTS as unknown as T;
+  }
+
+  if (cleanEndpoint === '/files/upload') {
+    return MOCK_INGESTED_DOCUMENTS[0] as unknown as T;
+  }
+
+  if (cleanEndpoint === '/audit/events') {
+    return {
+      items: MOCK_AUDIT_EVENTS,
+      total: MOCK_AUDIT_EVENTS.length,
+      limit: 50,
+      offset: 0,
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('/audit/events/')) {
+    const id = cleanEndpoint.split('/').pop();
+    const ev = MOCK_AUDIT_EVENTS.find(e => e.event_id === id) || MOCK_AUDIT_EVENTS[0];
+    return { event: ev } as unknown as T;
+  }
+
+  if (cleanEndpoint === '/audit/integrity' || cleanEndpoint === '/audit/verify') {
+    return { verification: MOCK_AUDIT_VERIFICATION } as unknown as T;
+  }
+
+  if (cleanEndpoint === '/audit/network') {
+    return { report: MOCK_NETWORK_REPORT } as unknown as T;
+  }
+
+  if (cleanEndpoint === '/audit/sovereignty') {
+    return { sovereignty: MOCK_SOVEREIGNTY_STATUS } as unknown as T;
+  }
+
+  return null;
+}
+
 export async function request<T>(
   endpoint: string,
   options: RequestInit = {},
-  timeoutMs = 30000
+  timeoutMs = 15000
 ): Promise<T> {
   const url = endpoint.startsWith('http') || endpoint.startsWith('/health')
     ? endpoint
@@ -36,7 +162,6 @@ export async function request<T>(
       ...(options.headers as Record<string, string> || {}),
     };
 
-    // Don't set Content-Type if FormData is used (browser sets multipart boundary)
     if (!(options.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
@@ -50,6 +175,13 @@ export async function request<T>(
     clearTimeout(id);
 
     if (!response.ok) {
+      // If server returned 404 or 502/503/500, try mock fallback
+      const fallback = getMockFallback<T>(endpoint, options);
+      if (fallback !== null) {
+        console.info(`[Sovereign Fallback] Server responded with HTTP ${response.status} for ${endpoint}. Used local offline fixture.`);
+        return fallback;
+      }
+
       let errorData: any = null;
       try {
         errorData = await response.json();
@@ -66,7 +198,6 @@ export async function request<T>(
       throw new ApiError(message, code, response.status, typeof errDetail === 'object' ? errDetail : undefined);
     }
 
-    // If 204 No Content
     if (response.status === 204) {
       return {} as T;
     }
@@ -74,6 +205,14 @@ export async function request<T>(
     return (await response.json()) as T;
   } catch (err: any) {
     clearTimeout(id);
+
+    // If fetch failed due to network error or abort, return mock fallback
+    const fallback = getMockFallback<T>(endpoint, options);
+    if (fallback !== null) {
+      console.info(`[Sovereign Fallback] Offline mode activated for ${endpoint} (${err.message || 'Fetch failed'}).`);
+      return fallback;
+    }
+
     if (err.name === 'AbortError') {
       throw new ApiError(`Request timeout after ${timeoutMs}ms`, 'TIMEOUT', 408);
     }

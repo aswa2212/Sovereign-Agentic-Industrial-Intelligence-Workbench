@@ -385,10 +385,13 @@ class AgentStateMachineOrchestrator:
                 if context.final_result.get("calculation"):
                     try:
                         structured_result = context.final_result.get("calculation", {})
-                        svc_result = self._structured_output_service.validate(structured_result)
+                        if hasattr(self._structured_output_service, "validate_calculation"):
+                            svc_result = self._structured_output_service.validate_calculation(structured_result)
+                        else:
+                            svc_result = self._structured_output_service.validate(structured_result)
                         context.final_result["structured_validation"] = {
                             "valid": svc_result.valid,
-                            "status": svc_result.status,
+                            "status": svc_result.status.value if hasattr(svc_result.status, "value") else str(svc_result.status),
                             "checks_passed": svc_result.checks_passed,
                             "checks_failed": svc_result.checks_failed,
                             "warnings": svc_result.warnings,

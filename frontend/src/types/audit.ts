@@ -1,5 +1,6 @@
 /**
- * Audit Ledger, Cryptographic Integrity, and Sovereignty types.
+ * SIH26117 — Cryptographic Audit & Sovereignty Types
+ * Source of Truth: SIH26117_MASTER_PROJECT_REPORT.md §6.2.C
  */
 
 export type AuditEventType =
@@ -13,13 +14,22 @@ export type AuditEventType =
   | 'VISION_ANALYSIS'
   | 'TOOL_STARTED'
   | 'TOOL_COMPLETED'
+  | 'TOOL_INVOKED'
+  | 'TOOL_RESULT'
+  | 'DOCUMENT_INGESTED'
   | 'VALIDATION_STARTED'
   | 'VALIDATION_COMPLETED'
+  | 'VALIDATION_PASSED'
+  | 'VALIDATION_FAILED'
   | 'DELIVERABLE_CREATED'
+  | 'DELIVERABLE_GENERATED'
   | 'TASK_COMPLETED'
   | 'TASK_FAILED'
   | 'NETWORK_CHECK'
-  | 'SOVEREIGNTY_CHECK';
+  | 'SOVEREIGNTY_CHECK'
+  | 'SOVEREIGNTY_VIOLATION'
+  | 'LEDGER_VERIFIED'
+  | 'PHYSICAL_ISOLATION_ATTESTED';
 
 export interface AuditEvent {
   event_id: string;
@@ -27,12 +37,13 @@ export interface AuditEvent {
   task_id?: string | null;
   event_type: AuditEventType;
   action: string;
+  actor?: string;
   agent_state?: string | null;
   model_role?: string | null;
   capability?: string | null;
   tool_name?: string | null;
   source?: string | null;
-  status: string;
+  status: 'SUCCESS' | 'FAILED' | 'WARNING' | string;
   duration_ms?: number | null;
   message?: string | null;
   metadata: Record<string, any>;
@@ -83,7 +94,31 @@ export interface SovereigntyStatus {
   provider_checks: ProviderSovereigntyCheck[];
   network_observation?: NetworkObservationReport | null;
   external_connections_observed: boolean;
+  foreign_sockets_count?: number;
   violations: string[];
   checked_at: string;
-  note: string;
+  note?: string;
 }
+
+export interface PhysicalIsolationAttestationChecklist {
+  ethernet_disconnected: boolean;
+  wifi_disabled: boolean;
+  adapter_disabled: boolean;
+  external_route_checked: boolean;
+  radios_checked: boolean;
+  operator_confirmed: boolean;
+  operator_notes?: string;
+}
+
+export interface PhysicalIsolationAttestation {
+  status: 'OPERATOR_VERIFIED' | 'NOT_ATTESTED';
+  event_id: string;
+  timestamp: string;
+  event_hash: string;
+  hostname: string;
+  operator_confirmed: boolean;
+  evidence: Record<string, any>;
+  network_observation: Record<string, any>;
+  sovereignty_status: string;
+}
+

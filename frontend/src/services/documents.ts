@@ -7,6 +7,13 @@ import { DocumentIngestionResult } from '../types/documents';
 
 export const documentService = {
   /**
+   * List ingested documents available in the local repository.
+   */
+  async listDocuments(): Promise<DocumentIngestionResult[]> {
+    return request<DocumentIngestionResult[]>('/files');
+  },
+
+  /**
    * Upload an industrial document (PDF, DOCX, XLSX, PNG, JPG) to raw storage
    * and extract normalized structure.
    */

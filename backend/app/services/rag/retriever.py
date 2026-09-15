@@ -14,12 +14,13 @@ try:
         BaseVectorStore,
         CitationSource,
         DocumentChunk,
+        EmbeddingModelUnavailableError,
         EmbeddingProvider,
         EmptyQueryError,
         RetrievedChunk,
     )
     from app.services.rag.chunker import HierarchicalChunker
-    from app.services.rag.embeddings import MockEmbeddingProvider
+    from app.services.rag.embeddings import MockEmbeddingProvider, OllamaEmbeddingProvider
     from app.services.rag.vector_store import LocalJsonVectorStore
 except ImportError:
     from backend.app.core.config import get_settings
@@ -28,12 +29,13 @@ except ImportError:
         BaseVectorStore,
         CitationSource,
         DocumentChunk,
+        EmbeddingModelUnavailableError,
         EmbeddingProvider,
         EmptyQueryError,
         RetrievedChunk,
     )
     from backend.app.services.rag.chunker import HierarchicalChunker
-    from backend.app.services.rag.embeddings import MockEmbeddingProvider
+    from backend.app.services.rag.embeddings import MockEmbeddingProvider, OllamaEmbeddingProvider
     from backend.app.services.rag.vector_store import LocalJsonVectorStore
 
 logger = logging.getLogger(__name__)
@@ -52,10 +54,39 @@ class SovereignRetriever:
         chunker: Optional[HierarchicalChunker] = None,
         default_top_k: Optional[int] = None,
         default_threshold: Optional[float] = None,
+        force_real_embeddings: bool = False,
     ) -> None:
         settings = get_settings()
         self.vector_store = vector_store or LocalJsonVectorStore()
-        self.embedding_provider = embedding_provider or MockEmbeddingProvider()
+        self._force_real = force_real_embeddings
+
+        if embedding_provider is not None:
+            if self._force_real and (
+                isinstance(embedding_provider, MockEmbeddingProvider)
+                or getattr(embedding_provider, "__class__", None).__name__ == "MockEmbeddingProvider"
+            ):
+                raise EmbeddingModelUnavailableError(
+                    "Real local embedding model unavailable: cannot use MockEmbeddingProvider when force_real_embeddings is active."
+                )
+            self.embedding_provider = embedding_provider
+        else:
+            store_dim = self.vector_store.get_status().get("dimension", 0)
+            if self._force_real:
+                ollama = OllamaEmbeddingProvider()
+                if not ollama.is_available():
+                    raise EmbeddingModelUnavailableError(
+                        "Real local embedding model unavailable: nomic-embed-text:latest must be loaded on Ollama (http://127.0.0.1:11434)"
+                    )
+                self.embedding_provider = ollama
+            elif store_dim == 384:
+                self.embedding_provider = MockEmbeddingProvider(dim=384)
+            else:
+                ollama = OllamaEmbeddingProvider()
+                if ollama.is_available():
+                    self.embedding_provider = ollama
+                else:
+                    self.embedding_provider = MockEmbeddingProvider(dim=768 if store_dim == 768 else 384)
+
         self.chunker = chunker or HierarchicalChunker()
         self.default_top_k = default_top_k or settings.rag_top_k
         self.default_threshold = default_threshold or settings.rag_similarity_threshold
@@ -109,6 +140,7 @@ class SovereignRetriever:
     async def index_document(
         self,
         doc: NormalizedDocument,
+        fail_on_mock: bool = False,
     ) -> List[DocumentChunk]:
         """
         Ingest a NormalizedDocument into the vector store:
@@ -116,6 +148,11 @@ class SovereignRetriever:
         2. Batch dense embedding
         3. Vector store insertion & persistence
         """
+        if (fail_on_mock or self._force_real) and isinstance(self.embedding_provider, MockEmbeddingProvider):
+            raise EmbeddingModelUnavailableError(
+                "Real local embedding model unavailable: real corpus indexing must never use MockEmbeddingProvider."
+            )
+
         chunks = self.chunker.chunk_document(doc)
         if not chunks:
             logger.warning("Document '%s' produced zero chunks", doc.original_filename)

@@ -7,6 +7,8 @@ import {
   AuditEvent,
   AuditVerificationResult,
   NetworkObservationReport,
+  PhysicalIsolationAttestation,
+  PhysicalIsolationAttestationChecklist,
   SovereigntyStatus,
 } from '../types/audit';
 
@@ -64,4 +66,25 @@ export const auditService = {
     const query = airGappedMode !== undefined ? `?air_gapped_mode=${airGappedMode}` : '';
     return request<{ sovereignty: SovereigntyStatus }>(`/audit/sovereignty${query}`);
   },
+
+  /**
+   * Record an explicit, auditable physical air-gap operator verification.
+   */
+  async attestPhysicalIsolation(
+    checklist: PhysicalIsolationAttestationChecklist,
+    operatorNotes?: string
+  ): Promise<PhysicalIsolationAttestation> {
+    return request<PhysicalIsolationAttestation>('/audit/attest-physical-isolation', {
+      method: 'POST',
+      body: JSON.stringify({ checklist, operator_notes: operatorNotes }),
+    });
+  },
+
+  /**
+   * Fetch the latest physical isolation attestation status from the local ledger.
+   */
+  async getLatestPhysicalAttestation(): Promise<PhysicalIsolationAttestation> {
+    return request<PhysicalIsolationAttestation>('/audit/attest-physical-isolation/latest');
+  },
 };
+

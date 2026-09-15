@@ -33,6 +33,7 @@ try:
     )
     from app.services.rag.retriever import SovereignRetriever
     from app.services.rag.vector_store import LocalJsonVectorStore
+    from app.api.v1.endpoints.rag import set_retriever
 except ImportError:
     from backend.app.core.config import get_settings
     from backend.app.main import app
@@ -55,6 +56,7 @@ except ImportError:
     )
     from backend.app.services.rag.retriever import SovereignRetriever
     from backend.app.services.rag.vector_store import LocalJsonVectorStore
+    from backend.app.api.v1.endpoints.rag import set_retriever
 
 client = TestClient(app)
 
@@ -347,6 +349,13 @@ class TestRAGAPI:
         storage = StorageManager()
         # Ensure processed document is stored under data/processed/
         storage.store_processed_document(doc.sha256, doc.model_dump())
+        mock_retriever = SovereignRetriever(
+            vector_store=LocalJsonVectorStore(index_id="test_api", storage_dir=tmp_path),
+            embedding_provider=MockEmbeddingProvider(dim=384),
+        )
+        set_retriever(mock_retriever)
+        yield
+        set_retriever(None)
 
     def test_api_rag_status_initial(self):
         res = client.get("/api/v1/rag/status")

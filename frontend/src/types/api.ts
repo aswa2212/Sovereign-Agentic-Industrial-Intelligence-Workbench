@@ -2,6 +2,8 @@
  * Shared API and System types for SIH26117 Workbench.
  */
 
+export type ModelRole = 'router' | 'reasoning' | 'coder' | 'vision' | 'embedding';
+
 export interface HealthResponse {
   status: string;
   air_gap_verified: boolean;

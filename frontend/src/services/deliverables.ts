@@ -3,9 +3,16 @@
  */
 
 import { request } from './api';
-import { DeliverableFormat, DeliverableGenerateResponse } from '../types/deliverables';
+import { DeliverableFormat, DeliverableGenerateResponse, GeneratedArtifact } from '../types/deliverables';
 
 export const deliverablesService = {
+  /**
+   * List all generated deliverables.
+   */
+  async listDeliverables(): Promise<GeneratedArtifact[]> {
+    return request<GeneratedArtifact[]>('/deliverables');
+  },
+
   /**
    * Request compilation of verified engineering results into Office deliverables.
    */

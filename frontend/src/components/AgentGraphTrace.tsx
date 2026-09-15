@@ -1,12 +1,14 @@
 import React from 'react';
 import { AgentState, StateTransition } from '../types/agent';
-import { CheckCircle2, Clock, AlertCircle, ArrowRight, Activity } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Activity } from 'lucide-react';
+import { DataSourceBadge } from './DataSourceBadge';
 
 interface AgentGraphTraceProps {
   currentState: AgentState;
   isRunning: boolean;
   trace: StateTransition[];
   taskId?: string | null;
+  executionMode?: 'deterministic' | 'live';
 }
 
 const ORDERED_STATES: AgentState[] = [
@@ -26,16 +28,16 @@ export const AgentGraphTrace: React.FC<AgentGraphTraceProps> = ({
   isRunning,
   trace,
   taskId,
+  executionMode = 'deterministic',
 }) => {
-  // Determine state progress
   const visitedStates = new Set<AgentState>(trace.map((t) => t.to_state));
   if (currentState !== 'IDLE' && currentState !== 'FAILED') {
     visitedStates.add(currentState);
   }
 
-  // Find index of current state in pipeline
   const currentIndex = ORDERED_STATES.indexOf(currentState);
   const isFailed = currentState === 'FAILED';
+  const hasStarted = trace.length > 0;
 
   const getStateStatus = (state: AgentState) => {
     if (isFailed && state === currentState) return 'failed';
@@ -47,119 +49,97 @@ export const AgentGraphTrace: React.FC<AgentGraphTraceProps> = ({
   };
 
   return (
-    <div className="card" style={{ marginBottom: '1.25rem' }}>
-      <div className="card-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Activity size={16} className={isRunning ? 'icon-spin' : ''} style={{ color: 'var(--accent-primary)' }} />
+    <div className="workbench-panel agent-trace-panel">
+      {/* Panel Header */}
+      <div className="panel-header">
+        <div className="panel-header-title-group">
+          <Activity size={16} className={`panel-header-icon ${isRunning ? 'icon-spin' : ''}`} />
           <div>
-            <div className="card-title">Agent State Machine Lifecycle Trace</div>
-            <div className="card-subtitle">
-              Deterministic 11-State Execution Graph • MRPL Refined Orchestrator
-            </div>
+            <h2 className="panel-title">Agent Execution Graph</h2>
+            <span className="panel-subtitle">11-Stage State Machine</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="panel-header-badges">
+          {hasStarted && (
+            <DataSourceBadge
+              source={executionMode === 'live' ? 'LIVE' : 'DEMO'}
+              label={executionMode === 'live' ? 'LIVE LOCAL MODEL' : 'DEMO DETERMINISTIC'}
+              size="sm"
+            />
+          )}
           {taskId && (
-            <span className="code-badge" title="Task Identifier">
-              ID: {taskId.slice(0, 8)}
+            <span className="badge-pill badge-neutral">
+              TASK: {taskId.slice(0, 8)}
             </span>
           )}
           {isFailed ? (
-            <span className="badge badge-danger">
-              <AlertCircle size={12} style={{ marginRight: '4px' }} />
-              FAILED
+            <span className="badge-pill badge-error">
+              <AlertCircle size={12} />
+              <span>FAILED</span>
             </span>
           ) : isRunning ? (
-            <span className="badge badge-info">
-              <Clock size={12} style={{ marginRight: '4px' }} className="icon-spin" />
-              RUNNING ({currentState})
+            <span className="badge-pill badge-warning">
+              <Clock size={12} className="icon-spin" />
+              <span>RUNNING ({currentState})</span>
             </span>
           ) : currentState === 'DELIVER' || visitedStates.has('DELIVER') ? (
-            <span className="badge badge-success">
-              <CheckCircle2 size={12} style={{ marginRight: '4px' }} />
-              COMPLETED
+            <span className="badge-pill badge-success">
+              <CheckCircle2 size={12} />
+              <span>COMPLETED</span>
             </span>
           ) : (
-            <span className="badge badge-neutral">IDLE</span>
+            <span className="badge-pill badge-neutral">IDLE</span>
           )}
         </div>
       </div>
 
-      {/* Sequential Pipeline Visualization */}
-      <div style={{ padding: '1rem', background: 'var(--bg-surface-muted)', borderBottom: '1px solid var(--border-subtle)', overflowX: 'auto' }}>
-        <div className="state-pipeline">
+      <div className="trace-body">
+        {/* Pipeline Nodes Strip */}
+        <div className="state-pipeline-strip">
           {ORDERED_STATES.map((state, idx) => {
             const status = getStateStatus(state);
             return (
               <React.Fragment key={state}>
                 <div
-                  className={`state-step state-step-${status}`}
+                  className={`pipeline-node node-${status}`}
                   title={`State: ${state} (${status})`}
                 >
-                  <div className="state-step-dot">
-                    {status === 'completed' && <CheckCircle2 size={14} />}
-                    {status === 'active' && <Clock size={14} className="icon-spin" />}
-                    {status === 'failed' && <AlertCircle size={14} />}
-                    {status === 'pending' && <span>{idx + 1}</span>}
-                  </div>
-                  <div className="state-step-label">{state}</div>
+                  <div className="pipeline-dot" />
+                  <span className="pipeline-label">{state}</span>
                 </div>
-
                 {idx < ORDERED_STATES.length - 1 && (
-                  <div className={`state-connector ${status === 'completed' ? 'active' : ''}`}>
-                    <ArrowRight size={12} />
-                  </div>
+                  <div className={`pipeline-connector conn-${status === 'completed' ? 'active' : 'inactive'}`} />
                 )}
               </React.Fragment>
             );
           })}
         </div>
-      </div>
 
-      {/* Detailed Chronological Transition Log */}
-      <div style={{ padding: '1rem', maxHeight: '240px', overflowY: 'auto' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-          Sequential Transition Ledger ({trace.length} recorded events)
-        </div>
-
-        {trace.length === 0 ? (
-          <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
-            No task active. Define an objective and initiate workflow to observe state machine execution.
-          </div>
-        ) : (
-          <div className="trace-list">
-            {trace.map((tr, index) => {
-              const timeStr = tr.timestamp ? new Date(tr.timestamp).toLocaleTimeString() : '--:--:--';
-              return (
-                <div key={index} className="trace-row">
-                  <div className="trace-meta">
-                    <span className="trace-time">{timeStr}</span>
-                    <span className="trace-step-badge">STEP {index + 1}</span>
+        {/* Step-by-Step Transition Log */}
+        <div className="trace-events-list">
+          {trace.length === 0 ? (
+            <div className="empty-trace-state">
+              <span>Agent idle. Click &ldquo;Start Analysis&rdquo; to launch the 11-stage autonomous execution sequence.</span>
+            </div>
+          ) : (
+            trace.map((tr, index) => (
+              <div key={index} className="trace-event-item">
+                <div className="trace-event-top">
+                  <div className="trace-states-pill">
+                    <code>{tr.from_state}</code>
+                    <span className="arrow-sep">&rarr;</span>
+                    <code>{tr.to_state}</code>
                   </div>
-
-                  <div className="trace-content">
-                    <div className="trace-transition">
-                      <span className="trace-state">{tr.from_state}</span>
-                      <ArrowRight size={11} style={{ margin: '0 4px', color: 'var(--text-muted)' }} />
-                      <span className="trace-state trace-state-target">{tr.to_state}</span>
-                    </div>
-                    {tr.message && <div className="trace-message">{tr.message}</div>}
-                    {tr.metadata && Object.keys(tr.metadata).length > 0 && (
-                      <div className="trace-tags">
-                        {Object.entries(tr.metadata).map(([k, v]) => (
-                          <span key={k} className="trace-tag">
-                            {k}: {String(v)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <span className="trace-timestamp">
+                    {new Date(tr.timestamp).toLocaleTimeString()}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                {tr.message && <div className="trace-message">{tr.message}</div>}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

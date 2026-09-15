@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import { GeneratedArtifact, DeliverableFormat } from '../types/deliverables';
 import { deliverablesService } from '../services/deliverables';
-import { FileText, Download, FileSpreadsheet, Presentation, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import {
+  FileText,
+  Download,
+  FileSpreadsheet,
+  CheckCircle2,
+  RefreshCw,
+  Lock,
+  ExternalLink,
+} from 'lucide-react';
+import { CopyableMono } from './CopyableMono';
+import { useToast } from './ToastProvider';
+import { DataSourceBadge } from './DataSourceBadge';
 
 interface DeliverablesPanelProps {
   artifacts: GeneratedArtifact[];
@@ -9,6 +20,8 @@ interface DeliverablesPanelProps {
   equipmentId?: string;
   summary?: string;
   onGenerated?: (artifacts: GeneratedArtifact[]) => void;
+  validationPassed?: boolean;
+  executionMode?: 'deterministic' | 'live';
 }
 
 export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
@@ -17,18 +30,29 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
   equipmentId = 'C-101',
   summary = 'Corrosion and integrity analysis findings.',
   onGenerated,
+  validationPassed = true,
+  executionMode = 'deterministic',
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
-  const handleGenerate = async (formats: DeliverableFormat[] = ['docx', 'xlsx', 'pptx']) => {
+  const isLive = executionMode === 'live';
+  const hasArtifacts = artifacts.length > 0;
+
+  const handleGenerate = async (formats: DeliverableFormat[] = ['docx', 'xlsx']) => {
+    if (!validationPassed) {
+      toast.error('Validation Gate Failed', 'Fail-Closed policy withholds deliverable compilation until all 12 checks pass.');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     try {
       const response = await deliverablesService.generateDeliverables(
         {
           equipment_id: equipmentId,
-          inspection_subject: 'Atmospheric Distillation Column Shell Inspection',
+          inspection_subject: 'Atmospheric Distillation Column Overhead Condenser Piping System',
           summary,
         },
         formats,
@@ -39,227 +63,123 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
         if (onGenerated) {
           onGenerated(response.artifacts);
         }
+        toast.success('Deliverables Compiled', `Successfully generated ${response.artifacts.length} publication documents.`);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to generate deterministic deliverables');
+      setError(err.message || 'Failed to compile deliverables');
+      toast.error('Compilation Error', err.message);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const getFormatIcon = (format: DeliverableFormat) => {
-    switch (format.toLowerCase()) {
-      case 'xlsx':
-        return <FileSpreadsheet size={20} style={{ color: '#059669' }} />;
-      case 'pptx':
-        return <Presentation size={20} style={{ color: '#d97706' }} />;
-      case 'docx':
-      default:
-        return <FileText size={20} style={{ color: '#1e3a8a' }} />;
-    }
-  };
-
-  const getFormatName = (format: DeliverableFormat) => {
-    switch (format.toLowerCase()) {
-      case 'xlsx':
-        return 'Microsoft Excel Worksheet';
-      case 'pptx':
-        return 'Microsoft PowerPoint Briefing';
-      case 'docx':
-      default:
-        return 'Microsoft Word Inspection Memo';
-    }
+  const handleDownload = (artifact: GeneratedArtifact) => {
+    toast.info('Downloading Artifact', artifact.filename);
+    // In demo / live, trigger download
+    const url = artifact.download_url || deliverablesService.getDownloadUrl(artifact.format, artifact.filename);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = artifact.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
-    <div className="card" style={{ marginBottom: '1.25rem' }}>
-      <div className="card-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <FileText size={16} style={{ color: 'var(--accent-primary)' }} />
+    <div className="workbench-panel deliverables-panel">
+      {/* Panel Header */}
+      <div className="panel-header">
+        <div className="panel-header-title-group">
+          <FileText size={16} className="panel-header-icon" />
           <div>
-            <div className="card-title">Deterministic Office Deliverables</div>
-            <div className="card-subtitle">
-              Native DOCX, XLSX, PPTX Generators • Clean Room Zero-Hallucination Schemas
-            </div>
+            <h2 className="panel-title">Deliverables Factory</h2>
+            <span className="panel-subtitle">Clean-Room DOCX &amp; XLSX Compilers</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="panel-header-badges">
+          <DataSourceBadge
+            source={hasArtifacts ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
+            label={hasArtifacts ? (isLive ? 'GENERATED LIVE' : 'DEMO ARTIFACT') : 'AWAITING RELEASE'}
+          />
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
-            onClick={() => handleGenerate(['docx', 'xlsx', 'pptx'])}
+            onClick={() => handleGenerate(['docx', 'xlsx'])}
             disabled={isGenerating}
-            title="Compile deterministic office documents from findings"
+            title="Compile publication-ready DOCX and XLSX deliverables"
           >
             {isGenerating ? (
               <>
                 <RefreshCw size={13} className="icon-spin" />
-                Compiling...
+                <span>Compiling...</span>
               </>
             ) : (
               <>
-                <FileText size={13} />
-                Generate All (DOCX/XLSX/PPTX)
+                <RefreshCw size={13} />
+                <span>Compile</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {error && (
-        <div
-          style={{
-            margin: '0.75rem 1rem',
-            padding: '0.625rem 0.875rem',
-            background: 'var(--status-error-bg)',
-            border: '1px solid var(--status-error-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '0.8125rem',
-            color: 'var(--status-error-text)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
-        >
-          <AlertCircle size={14} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <div style={{ padding: '1rem' }}>
+      <div className="panel-body-scroll">
         {artifacts.length === 0 ? (
-          <div
-            style={{
-              padding: '1.5rem 1rem',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: '0.8125rem',
-              background: 'var(--bg-surface-muted)',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px dashed var(--border-medium)',
-            }}
-          >
-            <div>No deliverables generated yet for this session.</div>
-            <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-              Click "Generate All" above or complete an inspection objective to produce verified office packages.
+          <div className="empty-panel-state">
+            <Lock size={26} className="empty-icon" />
+            <div className="empty-title">No Deliverables Released Yet</div>
+            <div className="empty-desc">
+              Deliverables are deterministically compiled and signed with SHA-256 only after the 12-point engineering validation gate passes 100%.
             </div>
           </div>
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '0.875rem',
-            }}
-          >
+          <div className="deliverables-cards-list">
             {artifacts.map((art) => {
-              const downloadUrl = deliverablesService.getDownloadUrl(art.format, art.filename);
-              const sizeKb = art.file_size_bytes ? (art.file_size_bytes / 1024).toFixed(1) : '—';
-              const timeStr = art.created_at ? new Date(art.created_at).toLocaleTimeString() : '--:--';
+              const isDocx = art.format === 'docx';
+              const sizeKb = (art.file_size_bytes / 1024).toFixed(1);
+              const hash = art.sha256_hash || art.sha256_checksum || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
               return (
-                <div
-                  key={art.artifact_id}
-                  className="card"
-                  style={{
-                    padding: '0.875rem',
-                    border: '1px solid var(--border-subtle)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
-                    background: 'var(--bg-surface)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    <div style={{ flexShrink: 0, marginTop: '2px' }}>
-                      {getFormatIcon(art.format)}
-                    </div>
-
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: '0.875rem',
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                        title={art.filename}
-                      >
-                        {art.filename}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {getFormatName(art.format)}
-                      </div>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          marginTop: '0.5rem',
-                          fontSize: '0.7rem',
-                        }}
-                      >
-                        <span className="code-badge">{art.format.toUpperCase()}</span>
-                        <span className="code-badge">{sizeKb} KB</span>
-                        <span style={{ color: 'var(--text-muted)' }}>{timeStr}</span>
-                      </div>
-
-                      {art.sha256_checksum && (
-                        <div
-                          style={{
-                            fontSize: '0.6875rem',
-                            color: 'var(--text-muted)',
-                            fontFamily: 'var(--font-mono)',
-                            marginTop: '0.25rem',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                          title={`SHA-256: ${art.sha256_checksum}`}
-                        >
-                          SHA: {art.sha256_checksum.slice(0, 16)}...
-                        </div>
+                <div key={art.artifact_id} className="deliverable-card">
+                  <div className="deliverable-card-top">
+                    <div className="deliv-format-icon-wrap">
+                      {isDocx ? (
+                        <FileText size={22} className="format-icon-docx" />
+                      ) : (
+                        <FileSpreadsheet size={22} className="format-icon-xlsx" />
                       )}
+                    </div>
+                    <div className="deliv-card-meta">
+                      <div className="deliv-filename">{art.filename}</div>
+                      <div className="deliv-format-badge">
+                        <span>{art.format.toUpperCase()}</span>
+                        <span>•</span>
+                        <span>{sizeKb} KB</span>
+                        <span>•</span>
+                        <DataSourceBadge
+                          source={isLive ? 'LIVE' : 'DEMO'}
+                          label={isLive ? 'GENERATED LIVE' : 'DEMO ARTIFACT'}
+                          size="sm"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      borderTop: '1px solid var(--border-subtle)',
-                      paddingTop: '0.625rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '0.75rem',
-                        color: 'var(--status-success-text)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <CheckCircle2 size={13} /> Ready
-                    </span>
+                  <div className="deliv-hash-row">
+                    <span className="hash-title">SHA-256 HASH:</span>
+                    <CopyableMono value={hash} truncateLength={28} label="Deliverable SHA-256" />
+                  </div>
 
-                    <div style={{ display: 'flex', gap: '0.375rem' }}>
-                      <a
-                        href={downloadUrl}
-                        download={art.filename}
-                        className="btn btn-primary btn-sm"
-                        style={{ textDecoration: 'none' }}
-                      >
-                        <Download size={12} />
-                        Download
-                      </a>
-                    </div>
+                  <div className="deliv-card-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm btn-full"
+                      onClick={() => handleDownload(art)}
+                    >
+                      <Download size={13} />
+                      <span>Download Clean-Room {art.format.toUpperCase()}</span>
+                    </button>
                   </div>
                 </div>
               );

@@ -624,3 +624,74 @@ def test_no_outbound_network_during_audit(temp_audit_service: AuditService):
     post_report = monitor.observe_connections()
     assert post_report.non_loopback_connections == initial_report.non_loopback_connections
     assert sov.status == "PASS"
+
+
+# ── 26. Physical Isolation Attestation Verification ──────────────────────────
+
+def test_physical_isolation_attestation_service(temp_audit_service: AuditService):
+    """Verify operator physical isolation attestation event recording and ledger integrity."""
+    checklist_evidence = {
+        "ethernet_disconnected": True,
+        "wifi_disabled": True,
+        "adapter_disabled": True,
+        "external_route_checked": True,
+        "radios_checked": True,
+        "operator_confirmed": True,
+    }
+
+    event = temp_audit_service.record_event(
+        event_type=AuditEventType.PHYSICAL_ISOLATION_ATTESTED,
+        action="Operator verified physical air-gap isolation checklist",
+        task_id="sovereignty-attestation",
+        metadata={
+            "checklist": checklist_evidence,
+            "operator_notes": "Evaluation station test operator check",
+            "hostname": "local-workstation",
+        },
+    )
+
+    assert event.event_type == AuditEventType.PHYSICAL_ISOLATION_ATTESTED
+    assert event.event_hash is not None
+    assert event.metadata["checklist"]["ethernet_disconnected"] is True
+
+    # Confirm cryptographic chain integrity with the newly added attestation
+    verification = temp_audit_service.verify_ledger()
+    assert verification.valid is True
+    assert verification.events_checked == 1
+
+
+# ── 27. Physical Isolation Attestation REST API ──────────────────────────────
+
+def test_physical_isolation_attestation_api():
+    """Verify POST /api/v1/audit/attest-physical-isolation and latest status retrieval."""
+    client = TestClient(app)
+
+    # 1. Test POST attestation
+    payload = {
+        "checklist": {
+            "ethernet_disconnected": True,
+            "wifi_disabled": True,
+            "adapter_disabled": True,
+            "external_route_checked": True,
+            "radios_checked": True,
+            "operator_confirmed": True,
+        },
+        "operator_notes": "Automated test operator verification",
+    }
+
+    resp = client.post("/api/v1/audit/attest-physical-isolation", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "OPERATOR_VERIFIED"
+    assert data["operator_confirmed"] is True
+    assert "event_id" in data
+    assert "event_hash" in data
+    assert data["evidence"]["ethernet_disconnected"] is True
+
+    # 2. Test GET latest attestation
+    latest_resp = client.get("/api/v1/audit/attest-physical-isolation/latest")
+    assert latest_resp.status_code == 200
+    latest_data = latest_resp.json()
+    assert latest_data["status"] == "OPERATOR_VERIFIED"
+    assert latest_data["event_id"] == data["event_id"]
+

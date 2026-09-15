@@ -1,117 +1,141 @@
 import React from 'react';
+import { ShieldCheck, ShieldAlert, RefreshCw, Sliders, Terminal, Cpu } from 'lucide-react';
 import { useSovereignty } from '../hooks/useSovereignty';
-import { ShieldCheck, ShieldAlert, WifiOff, RefreshCw, Cpu, Database } from 'lucide-react';
 
 interface SovereigntyBarProps {
+  onOpenCommandPalette: () => void;
+  onOpenSettings?: () => void;
   onNavigateToSovereignty?: () => void;
+  onOpenAttestation?: () => void;
 }
 
-export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({ onNavigateToSovereignty }) => {
-  const { health, sovereignty, network, integrity, loading, refresh } = useSovereignty(15000);
+export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({
+  onOpenCommandPalette,
+  onOpenSettings,
+  onNavigateToSovereignty,
+  onOpenAttestation,
+}) => {
+  const { sovereignty, physicalAttestation, activeModel, loading, refresh, isPolling } = useSovereignty(10000);
 
-  const isLocalOperational = sovereignty?.status === 'PASS' || health?.air_gap_verified;
-  const externalConnections = network?.non_loopback_connections ?? 0;
-  const isIntegrityValid = integrity?.valid ?? true;
-  const eventsCount = integrity?.events_checked ?? 0;
+  const isSoftwareSovereign = sovereignty?.status === 'PASS' && !sovereignty.external_connections_observed;
+  const foreignSockets = sovereignty?.foreign_sockets_count ?? 0;
+  const isPhysicallyAttested = physicalAttestation?.status === 'OPERATOR_VERIFIED';
 
   return (
-    <header className="sov-bar" role="banner" aria-label="Sovereignty and Operational Integrity Bar">
-      <div className="sov-brand">
-        <div className="sov-brand-mark" aria-hidden="true">
-          MRPL
+    <header className="sovereign-status-strip" role="banner">
+      {/* Brand & Organization */}
+      <div className="status-strip-left">
+        <div className="status-brand-pill">
+          <span className="status-brand-sponsor">MRPL</span>
+          <span className="status-brand-divider">/</span>
+          <span className="status-brand-id">SIH26117</span>
         </div>
-        <div>
-          <div className="sov-title">SOVEREIGN AGENTIC WORKBENCH</div>
-          <div className="sov-subtitle">
-            Mangalore Refinery and Petrochemicals Limited • Industrial Operations
-          </div>
+        <div className="status-strip-title">
+          <span className="title-bold">Sovereign Agentic AI Workbench</span>
+          <span className="title-subtitle">Refinery Control Deck</span>
         </div>
       </div>
 
-      <div className="sov-metrics">
-        {/* Local Provider Enforcement */}
-        <div
-          className="sov-metric-item"
-          title="Local-only provider enforcement active. No cloud API dependencies configured."
-        >
-          <div className="sov-metric-label">Execution Environment</div>
-          <div className="sov-metric-value">
-            {isLocalOperational ? (
-              <span className="badge badge-success">
-                <ShieldCheck size={12} style={{ marginRight: '4px' }} />
-                Local Enforced
-              </span>
-            ) : (
-              <span className="badge badge-warning">
-                <ShieldAlert size={12} style={{ marginRight: '4px' }} />
-                Provider Notice
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Runtime Network Observation */}
-        <div
-          className="sov-metric-item"
-          title="Observed OS socket connections. Physical air-gap isolation remains an environment/deployment control."
-        >
-          <div className="sov-metric-label">Network Sockets</div>
-          <div className="sov-metric-value">
-            {externalConnections === 0 ? (
-              <span className="badge badge-local">
-                <WifiOff size={12} style={{ marginRight: '4px' }} />
-                0 External Sockets
-              </span>
-            ) : (
-              <span className="badge badge-danger">
-                {externalConnections} Non-Loopback
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Audit Hash-Chain Integrity */}
-        <div
-          className="sov-metric-item"
-          title="SHA-256 tamper-evident hash-chain verification over local audit event records."
-        >
-          <div className="sov-metric-label">Audit Ledger</div>
-          <div className="sov-metric-value">
-            {isIntegrityValid ? (
-              <span className="badge badge-success">
-                <Database size={12} style={{ marginRight: '4px' }} />
-                Chain Verified ({eventsCount})
-              </span>
-            ) : (
-              <span className="badge badge-danger">
-                <ShieldAlert size={12} style={{ marginRight: '4px' }} />
-                Integrity Alert
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Active Engine */}
-        <div className="sov-metric-item">
-          <div className="sov-metric-label">Inference Engine</div>
-          <div className="sov-metric-value">
-            <span className="badge badge-neutral">
-              <Cpu size={12} style={{ marginRight: '4px' }} />
-              Ollama (On-Prem)
-            </span>
-          </div>
-        </div>
-
-        {/* Refresh button */}
+      {/* Center / Command Palette Hint */}
+      <div className="status-strip-center">
         <button
-          className="btn btn-secondary btn-sm"
-          onClick={refresh}
-          title="Re-query sovereignty, network, and integrity status"
-          aria-label="Refresh sovereignty status"
-          disabled={loading}
-          style={{ padding: '4px 8px', marginLeft: '4px' }}
+          type="button"
+          className="status-cmd-shortcut"
+          onClick={onOpenCommandPalette}
+          title="Open Command Palette (Cmd/Ctrl + K)"
+          aria-label="Open Command Palette"
         >
-          <RefreshCw size={13} className={loading ? 'icon-spin' : ''} />
+          <Terminal size={13} className="shortcut-icon" />
+          <span className="shortcut-text">Quick Launch &amp; Jump</span>
+          <kbd className="cmd-kbd">⌘K</kbd>
+        </button>
+      </div>
+
+      {/* Right Controls & Sovereignty Proofs */}
+      <div className="status-strip-right">
+        {/* Dynamic Model Badge (Sourced live from GET /models/tier) */}
+        <div
+          className="status-model-badge"
+          title={`Active Hardware Tier: ${sovereignty?.local_mode_enabled ? 'Local Edge Server / RTX 4060' : 'Disconnected'}`}
+        >
+          <Cpu size={14} className="model-badge-icon" />
+          <span className="model-badge-label">Model:</span>
+          <code className="model-badge-tag">{activeModel}</code>
+        </div>
+
+        {/* 1. Software Locality & Network Observation Badge */}
+        <button
+          type="button"
+          className={`airgap-proof-badge ${isSoftwareSovereign ? 'is-verified' : 'is-warning'}`}
+          onClick={onNavigateToSovereignty}
+          title={
+            isSoftwareSovereign
+              ? 'Software Sovereignty: 0 external egress sockets on 127.0.0.1 loopback'
+              : `Warning: ${foreignSockets} non-loopback socket(s) detected`
+          }
+          aria-live="polite"
+        >
+          {isSoftwareSovereign ? (
+            <>
+              <ShieldCheck size={14} className="airgap-icon" />
+              <span className="airgap-label">SOVEREIGN: LOCAL (0 EXTERNAL)</span>
+              <span className="airgap-live-indicator" title="Live Host Sockets Polling Active">
+                <span className="airgap-pulse-dot" />
+              </span>
+            </>
+          ) : (
+            <>
+              <ShieldAlert size={14} className="airgap-icon" />
+              <span className="airgap-label">SOCKET WARNING ({foreignSockets})</span>
+            </>
+          )}
+        </button>
+
+        {/* 2. Physical Air-Gap Attestation Badge (Truthful: Operator Verified vs Check Required) */}
+        <button
+          type="button"
+          className={`airgap-proof-badge ${isPhysicallyAttested ? 'is-attested' : 'is-attest-pending'}`}
+          onClick={onOpenAttestation || onNavigateToSovereignty}
+          title={
+            isPhysicallyAttested
+              ? `Physical Air-Gap: Operator Verified (Event #${physicalAttestation?.event_id?.slice(0, 8)})`
+              : 'Physical Air-Gap: Operator Verification Required (Click to attest)'
+          }
+          aria-label="Physical Air-Gap Status"
+        >
+          {isPhysicallyAttested ? (
+            <>
+              <ShieldCheck size={14} className="airgap-icon" />
+              <span className="airgap-label">PHYSICAL: OPERATOR VERIFIED</span>
+            </>
+          ) : (
+            <>
+              <ShieldAlert size={14} className="airgap-icon" />
+              <span className="airgap-label">PHYSICAL: CHECK REQUIRED</span>
+            </>
+          )}
+        </button>
+
+        {/* Live Refresh Action */}
+        <button
+          type="button"
+          className={`status-action-btn ${loading ? 'is-spinning' : ''}`}
+          onClick={refresh}
+          title="Refresh Sovereignty & Telemetry"
+          aria-label="Refresh Telemetry"
+        >
+          <RefreshCw size={14} />
+        </button>
+
+        {/* Settings Action */}
+        <button
+          type="button"
+          className="status-action-btn"
+          onClick={onOpenSettings || onOpenCommandPalette}
+          title="System Settings & Hardware Profile"
+          aria-label="System Settings"
+        >
+          <Sliders size={14} />
         </button>
       </div>
     </header>

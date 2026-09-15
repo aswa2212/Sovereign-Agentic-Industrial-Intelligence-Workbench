@@ -11,7 +11,7 @@ DESIGN PRINCIPLES:
 """
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -261,7 +261,7 @@ class ValidationResult(BaseModel):
 
     valid: bool = Field(..., description="True if and only if all validation checks passed")
     status: str = Field(..., description="Validation outcome status code")
-    validated_data: Optional[CorrosionAuditResult] = Field(
+    validated_data: Optional[Union[CorrosionAuditResult, CorrosionCalculation]] = Field(
         default=None,
         description="The fully validated structured result (only populated when valid=True)",
     )

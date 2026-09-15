@@ -35,6 +35,7 @@ try:
     from app.services.validation.exceptions import ParsingError, SchemaValidationError
     from app.services.validation.models import (
         CorrosionAuditResult,
+        CorrosionCalculation,
         ValidationErrorDetail,
         ValidationResult,
     )
@@ -49,6 +50,7 @@ except ImportError:
     from backend.app.services.validation.exceptions import ParsingError, SchemaValidationError
     from backend.app.services.validation.models import (
         CorrosionAuditResult,
+        CorrosionCalculation,
         ValidationErrorDetail,
         ValidationResult,
     )
@@ -229,3 +231,123 @@ class StructuredOutputService:
             checks_failed=[],
             calculation_tolerance_mm_per_year=self._rate_tolerance,
         )
+
+    def validate_calculation(
+        self, raw: Union[str, bytes, dict, CorrosionCalculation]
+    ) -> ValidationResult:
+        """
+        Validate an intermediate calculation payload against the CorrosionCalculation schema.
+        Accepts dicts, bytes/strings (JSON), or existing CorrosionCalculation instances.
+        Normalizes legacy tool outputs while enforcing engineering bounds and extra='forbid'.
+        """
+        if isinstance(raw, CorrosionCalculation):
+            return ValidationResult(
+                valid=True,
+                status=ValidationStatus.VALID,
+                validated_data=raw,
+                validation_checks=["calculation_schema_validation"],
+                checks_passed=["calculation_schema_validation"],
+                checks_failed=[],
+            )
+
+        # Stage 1: Parse if string or bytes
+        payload: Any = raw
+        if isinstance(raw, (str, bytes)):
+            try:
+                payload = parse_model_output(raw)
+            except ParsingError as exc:
+                return ValidationResult(
+                    valid=False,
+                    status=ValidationStatus.PARSING_ERROR,
+                    errors=[
+                        ValidationErrorDetail(
+                            code="PARSING_ERROR",
+                            message=str(exc),
+                            stage=ValidationStage.PARSING.value,
+                        )
+                    ],
+                    validation_checks=["parse_calculation_output"],
+                    checks_failed=["parse_calculation_output"],
+                )
+
+        if not isinstance(payload, dict):
+            return ValidationResult(
+                valid=False,
+                status=ValidationStatus.SCHEMA_ERROR,
+                errors=[
+                    ValidationErrorDetail(
+                        code="SCHEMA_ERROR",
+                        message=f"Expected dictionary payload for calculation, got {type(payload).__name__}",
+                        stage=ValidationStage.SCHEMA.value,
+                    )
+                ],
+                validation_checks=["calculation_schema_validation"],
+                checks_failed=["calculation_schema_validation"],
+            )
+
+        # Stage 2: Schema normalization for tool outputs
+        calc_data = dict(payload)
+        # Handle field aliases from calculation tools
+        if "current_thickness_mm" not in calc_data and "nominal_or_actual_mm" in calc_data:
+            calc_data["current_thickness_mm"] = calc_data["nominal_or_actual_mm"]
+        if "minimum_required_mm" not in calc_data and "retired_limit_mm" in calc_data:
+            calc_data["minimum_required_mm"] = calc_data["retired_limit_mm"]
+        if "initial_thickness_mm" not in calc_data:
+            curr = calc_data.get("current_thickness_mm")
+            rate = calc_data.get("corrosion_rate_mm_per_year", calc_data.get("corrosion_rate", 0.0))
+            interval = calc_data.get("inspection_interval_years", 5.0)
+            if curr is not None and rate is not None:
+                try:
+                    calc_data["initial_thickness_mm"] = round(
+                        float(curr) + float(rate) * float(interval), 4
+                    )
+                except (ValueError, TypeError):
+                    pass
+        if "inspection_interval_years" not in calc_data:
+            calc_data["inspection_interval_years"] = 5.0
+        if "corrosion_rate_mm_per_year" not in calc_data and "corrosion_rate" in calc_data:
+            calc_data["corrosion_rate_mm_per_year"] = calc_data["corrosion_rate"]
+
+        # Filter strictly to CorrosionCalculation fields to comply with extra="forbid"
+        allowed_fields = {
+            "initial_thickness_mm",
+            "current_thickness_mm",
+            "inspection_interval_years",
+            "minimum_required_mm",
+            "corrosion_rate_mm_per_year",
+            "remaining_life_years",
+            "formula_applied",
+        }
+        filtered_payload = {k: v for k, v in calc_data.items() if k in allowed_fields}
+
+        # Stage 3: Pydantic Schema Validation
+        try:
+            from pydantic import ValidationError as PydanticValidationError
+
+            validated = CorrosionCalculation.model_validate(filtered_payload)
+            return ValidationResult(
+                valid=True,
+                status=ValidationStatus.VALID,
+                validated_data=validated,
+                validation_checks=["calculation_schema_validation"],
+                checks_passed=["calculation_schema_validation"],
+                checks_failed=[],
+            )
+        except PydanticValidationError as exc:
+            from app.services.validation.schema_validator import _format_pydantic_errors
+
+            errors = _format_pydantic_errors(exc)
+            logger.warning(
+                "StructuredOutputService: calculation schema validation failed — %d error(s)",
+                len(errors),
+            )
+            return ValidationResult(
+                valid=False,
+                status=ValidationStatus.SCHEMA_ERROR,
+                errors=errors,
+                validation_checks=["calculation_schema_validation"],
+                checks_passed=[],
+                checks_failed=["calculation_schema_validation"],
+                warnings=[f"{e.field or 'root'}: {e.message}" for e in errors],
+            )
+
