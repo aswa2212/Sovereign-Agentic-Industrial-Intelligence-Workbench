@@ -73,16 +73,28 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
     }
   };
 
-  const handleDownload = (artifact: GeneratedArtifact) => {
+  const handleDownload = async (artifact: GeneratedArtifact) => {
     toast.info('Downloading Artifact', artifact.filename);
-    // In demo / live, trigger download
-    const url = artifact.download_url || deliverablesService.getDownloadUrl(artifact.format, artifact.filename);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = artifact.filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const url = artifact.download_url || deliverablesService.getDownloadUrl(artifact.format, artifact.filename);
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = artifact.filename;
+      document.body.appendChild(a);
+      a.click();
+      window.setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 150);
+    } catch (err: any) {
+      toast.error('Download Failed', err.message || 'Unable to download deliverable');
+    }
   };
 
   return (

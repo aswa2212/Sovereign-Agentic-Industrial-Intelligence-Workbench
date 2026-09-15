@@ -53,6 +53,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Length", "X-Request-ID"],
 )
 
 # Mount API v1 router
