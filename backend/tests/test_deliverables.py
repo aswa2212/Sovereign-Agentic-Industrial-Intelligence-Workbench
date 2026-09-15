@@ -537,6 +537,52 @@ class TestDeliverablesAPI:
         res = client.get("/api/v1/deliverables/download/docx/nonexistent_file_9999.docx")
         assert res.status_code == 404
 
+    def test_api_list_deliverables(self, sample_audit_result):
+        # Generate an artifact to ensure at least one exists
+        client.post(
+            "/api/v1/deliverables/generate",
+            json={
+                "data": sample_audit_result.model_dump(),
+                "formats": ["docx"],
+            },
+        )
+        res = client.get("/api/v1/deliverables")
+        assert res.status_code == 200
+        data = res.json()
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert "artifact_id" in data[0]
+        assert "download_url" in data[0]
+
+    def test_api_download_by_artifact_id(self, sample_audit_result):
+        gen_res = client.post(
+            "/api/v1/deliverables/generate",
+            json={
+                "data": sample_audit_result.model_dump(),
+                "formats": ["docx"],
+            },
+        )
+        art = gen_res.json()["artifacts"][0]
+        art_id = art["artifact_id"]
+
+        dl_res = client.get(f"/api/v1/deliverables/{art_id}/download")
+        assert dl_res.status_code == 200
+        assert len(dl_res.content) > 0
+
+    def test_api_download_by_artifact_id_mock_memorandum(self):
+        dl_res = client.get("/api/v1/deliverables/art-c101-memorandum/download")
+        assert dl_res.status_code == 200
+        assert len(dl_res.content) > 0
+
+    def test_api_download_by_artifact_id_mock_workbook(self):
+        dl_res = client.get("/api/v1/deliverables/art-c101-workbook/download")
+        assert dl_res.status_code == 200
+        assert len(dl_res.content) > 0
+
+    def test_api_download_by_artifact_id_path_traversal_blocked(self):
+        res = client.get("/api/v1/deliverables/..%2F..%2Fetc/download")
+        assert res.status_code in [400, 403, 404]
+
 
 # ── 9. Phase 9 Integration Tests ──────────────────────────────────────────────
 

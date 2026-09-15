@@ -663,7 +663,7 @@ class CorrosionAuditWorkflow:
                         relative_path=art.relative_path,
                         file_size_bytes=art.file_size_bytes,
                         sha256=art.sha256_hash,
-                        download_url=f"/api/v1/deliverables/{art.artifact_id}/download",
+                        download_url=f"/api/v1/deliverables/download/{art.format.value}/{art.filename}",
                     )
                 )
 

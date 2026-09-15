@@ -7,7 +7,7 @@ Enforces strict input validation and zero sensitive stack trace exposure.
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 
@@ -182,3 +182,71 @@ async def download_deliverable(fmt: str, filename: str) -> FileResponse:
         media_type=media_type,
         filename=filename,
     )
+
+
+@router.get(
+    "",
+    summary="List all generated Office deliverables",
+)
+async def list_deliverables() -> List[Dict[str, Any]]:
+    """
+    Returns metadata for all available Office deliverables.
+    """
+    factory = get_deliverables_factory()
+    artifacts = factory.list_artifacts()
+    res = []
+    for a in artifacts:
+        fmt_val = a.format.value if hasattr(a.format, "value") else str(a.format)
+        res.append({
+            "artifact_id": a.artifact_id,
+            "format": fmt_val,
+            "filename": a.filename,
+            "file_size_bytes": a.file_size_bytes,
+            "relative_path": a.relative_path,
+            "sha256_hash": a.sha256_hash,
+            "created_at": a.generated_at,
+            "download_url": f"/api/v1/deliverables/download/{fmt_val}/{a.filename}",
+            "verification_status": a.verification_status,
+        })
+    return res
+
+
+@router.get(
+    "/{artifact_id}/download",
+    response_class=FileResponse,
+    summary="Download a generated Office deliverable by artifact ID or filename",
+)
+async def download_deliverable_by_id(artifact_id: str) -> FileResponse:
+    """
+    Provides secure download of generated deliverables by artifact_id or filename.
+    Resolves artifact_id to verified file on disk with anti-traversal safety.
+    """
+    if ".." in artifact_id or "/" in artifact_id or "\\" in artifact_id or "\x00" in artifact_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "SECURITY_VIOLATION", "message": "Invalid artifact identifier."},
+        )
+
+    factory = get_deliverables_factory()
+    resolved = factory.find_artifact_file(artifact_id)
+    if not resolved:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "FILE_NOT_FOUND", "message": f"Deliverable '{artifact_id}' was not found."},
+        )
+
+    file_path, fmt, filename = resolved
+
+    media_types = {
+        DeliverableFormat.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        DeliverableFormat.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        DeliverableFormat.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+    media_type = media_types.get(fmt, "application/octet-stream")
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=filename,
+    )
+

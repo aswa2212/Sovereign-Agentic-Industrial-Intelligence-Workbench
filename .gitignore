@@ -66,6 +66,9 @@ outputs/xlsx/*
 !outputs/xlsx/.gitkeep
 outputs/pptx/*
 !outputs/pptx/.gitkeep
+outputs/deliverables/*
+!outputs/deliverables/.gitkeep
+outputs/*.json
 
 # Sensitive Data & Ingested Files (retain folder structure via .gitkeep)
 data/raw/*
@@ -76,6 +79,8 @@ data/knowledge/*
 !data/knowledge/.gitkeep
 data/samples/*
 !data/samples/.gitkeep
+data/deliverables/*
+!data/deliverables/.gitkeep
 
 # Environment & Credentials
 .env
