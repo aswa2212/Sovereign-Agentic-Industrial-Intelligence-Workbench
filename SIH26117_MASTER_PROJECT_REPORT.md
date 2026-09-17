@@ -765,11 +765,12 @@ The workbench enforces five non-negotiable failure-safety invariants verified by
   - `ollama pull qwen2.5:1.5b`
   - `ollama pull nomic-embed-text`
 
-### 10.2 Starting Development Servers
+### 10.2 Starting Development & Demonstration Servers
 1. **Start Backend Server:**
    ```powershell
    $env:PYTHONPATH='backend'
-   python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+   # Run without --reload to preserve WindowsProactorEventLoopPolicy for deterministic subprocess sandbox execution:
+   python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
    ```
 2. **Start Frontend Dev Server:**
    ```powershell

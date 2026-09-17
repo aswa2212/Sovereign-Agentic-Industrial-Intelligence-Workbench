@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck, ShieldAlert, RefreshCw, Sliders, Terminal, Cpu } from 'lucide-react';
 import { useSovereignty } from '../hooks/useSovereignty';
+import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
 
 interface SovereigntyBarProps {
   onOpenCommandPalette: () => void;
@@ -15,7 +16,11 @@ export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({
   onNavigateToSovereignty,
   onOpenAttestation,
 }) => {
-  const { sovereignty, physicalAttestation, activeModel, loading, refresh, isPolling } = useSovereignty(10000);
+  const { sovereignty, physicalAttestation, activeModel: sovereigntyModel, loading, refresh, isPolling } = useSovereignty(10000);
+  const { runtimeState, activeModel: workbenchModel } = useWorkbenchRuntime();
+
+  // The active model represents the model actually allocated/used by current execution or routed preview
+  const displayModel = runtimeState.activeModel || runtimeState.routedModel || sovereigntyModel || 'MODEL UNAVAILABLE';
 
   const isSoftwareSovereign = sovereignty?.status === 'PASS' && !sovereignty.external_connections_observed;
   const foreignSockets = sovereignty?.foreign_sockets_count ?? 0;
@@ -60,7 +65,7 @@ export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({
         >
           <Cpu size={14} className="model-badge-icon" />
           <span className="model-badge-label">Model:</span>
-          <code className="model-badge-tag">{activeModel}</code>
+          <code className="model-badge-tag">{displayModel}</code>
         </div>
 
         {/* 1. Software Locality & Network Observation Badge */}

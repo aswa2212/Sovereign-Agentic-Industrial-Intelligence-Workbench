@@ -128,7 +128,7 @@ class TestPhase15ExecutionModes:
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
 
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, is_demo_preset=True)
         result = await wf.run(req)
 
         assert result.status == WorkflowStatus.COMPLETED
@@ -143,7 +143,7 @@ class TestPhase15ExecutionModes:
         mgr = ModelManager(backend=unhealthy_backend, tier_config=mock_tier_config)
 
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
 
         # In LIVE mode, failing health check must raise IntegrationError / fail workflow
         result = await wf.run(req)
@@ -159,7 +159,7 @@ class TestPhase15ExecutionModes:
 
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
 
         result = await wf.run(req)
         assert result.status in (WorkflowStatus.FAILED, WorkflowStatus.VALIDATION_FAILED)
@@ -220,7 +220,7 @@ class TestPhase15StructuredOutputAndAudit:
 
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
         wf = CorrosionAuditWorkflow(model_manager=mgr, audit_service=audit_svc)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
 
         result = await wf.run(req)
         new_events = audit_svc.store.get_all_events()
@@ -234,7 +234,7 @@ class TestPhase15StructuredOutputAndAudit:
         mock_backend = MockInferenceBackend(always_healthy=True)
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, is_demo_preset=True)
 
         result = await wf.run(req)
         assert result.sovereignty_proof["status"] == "PASS"

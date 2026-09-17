@@ -16,7 +16,7 @@ import { CopyableMono } from './CopyableMono';
 
 interface DocumentViewerProps {
   documents: DocumentIngestionResult[];
-  onUploadSuccess?: (doc: DocumentIngestionResult) => void;
+  onUploadSuccess?: (doc: DocumentIngestionResult, file?: File) => void;
   selectedDoc?: DocumentIngestionResult | null;
   onSelectDoc?: (doc: DocumentIngestionResult) => void;
   compact?: boolean;
@@ -49,7 +49,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [activePreviewDoc, setActivePreviewDoc] = useState<DocumentIngestionResult | null>(
-    selectedDoc || (documents.length > 0 ? documents[0] : null)
+    selectedDoc || null
   );
   const [activeTab, setActiveTab] = useState<'survey' | 'params' | 'archive'>('survey');
 
@@ -61,7 +61,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     try {
       const result = await documentService.uploadDocument(file);
       if (onUploadSuccess) {
-        onUploadSuccess(result);
+        onUploadSuccess(result, file);
       }
       setActivePreviewDoc(result);
     } catch (err: any) {
@@ -79,7 +79,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
   };
 
-  const activeDoc = selectedDoc || activePreviewDoc || documents[0];
+  const activeDoc = selectedDoc || activePreviewDoc || null;
 
   return (
     <div className="workbench-panel document-viewer-panel">
@@ -139,8 +139,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           )}
         </div>
 
-        {/* Ingested Document Metadata Pill */}
-        {activeDoc && (
+        {/* Ingested Document Metadata Pill or Clean Empty State */}
+        {activeDoc ? (
           <div className="active-doc-banner">
             <div className="active-doc-top">
               <span className="active-doc-filename">{activeDoc.filename}</span>
@@ -156,6 +156,18 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               <span>Tables: {activeDoc.table_count}</span>
               <span>•</span>
               <span>Size: {(activeDoc.size_bytes / 1024).toFixed(1)} KB</span>
+            </div>
+          </div>
+        ) : (
+          <div className="active-doc-banner doc-empty-banner">
+            <div className="active-doc-top">
+              <span className="active-doc-filename" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
+                No document loaded
+              </span>
+              <span className="badge-pill badge-neutral">UNBOUND</span>
+            </div>
+            <div className="active-doc-meta-row" style={{ marginTop: '0.2rem' }}>
+              <span>Drop an inspection report or P&amp;ID schematic to begin.</span>
             </div>
           </div>
         )}
@@ -189,116 +201,212 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
         </div>
 
         {/* Sub-View: Ultrasonic Survey Data Table */}
-        {activeTab === 'survey' && (
-          <div className="evidence-card survey-table-card">
-            <div className="table-responsive">
-              <table className="deck-table">
-                <thead>
-                  <tr>
-                    <th>CML</th>
-                    <th>Inspection Location</th>
-                    <th className="num-col">Nominal</th>
-                    <th className="num-col">Actual</th>
-                    <th className="num-col">Δt Loss</th>
-                    <th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {SAMPLE_SURVEY_DATA.map((row) => {
-                    const isMaxLoss = row.cml_tag === 'CML-4';
-                    return (
-                      <tr key={row.cml_tag} className={isMaxLoss ? 'row-critical-highlight' : ''}>
-                        <td>
-                          <code className="cml-tag-badge">{row.cml_tag}</code>
-                        </td>
-                        <td className="location-desc-cell">{row.location_desc}</td>
-                        <td className="num-col mono-num">{row.nominal_mm.toFixed(2)} mm</td>
-                        <td className="num-col mono-num highlight-actual">{row.actual_mm.toFixed(2)} mm</td>
-                        <td className="num-col mono-num text-warning">{row.loss_mm.toFixed(2)} mm</td>
-                        <td className="mono-date">{row.date_measured}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+        {activeTab === 'survey' && (() => {
+          if (!activeDoc) {
+            return (
+              <div className="evidence-card survey-table-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                  No inspection survey loaded. Ingest an ultrasonic thickness survey or execute the C-101 demonstration preset to view gauging measurements.
+                </p>
+              </div>
+            );
+          }
 
-            <div className="table-footnote">
-              <span className="footnote-alert">CRITICAL CML:</span>
-              <span>CML-4 represents minimum wall thickness location (10.10 mm) governed by API 570 §7.1.</span>
+          if (activeDoc.status === 'failed') {
+            return (
+              <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
+                <h3 style={{ color: 'var(--accent-danger, #ef4444)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
+                  EXTRACTION UNAVAILABLE
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                  The document ingestion pipeline failed to parse valid tabular gauging data from this file.
+                </p>
+              </div>
+            );
+          }
+
+          const isDrawing = (activeDoc as any).is_drawing || activeDoc.filename.toLowerCase().includes('pid') || activeDoc.filename.toLowerCase().includes('p&id');
+          if (isDrawing) {
+            return (
+              <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
+                <h3 style={{ color: 'var(--accent-info, #38bdf8)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
+                  P&amp;ID SCHEMATIC DETECTED
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                  Engineering schematic detected without ultrasonic thickness tables. Visual findings and tag extractions are handled via the OCR / VLM engine.
+                </p>
+              </div>
+            );
+          }
+
+          const isC101Demo = activeDoc.filename.toLowerCase().includes('c101') || activeDoc.filename.toLowerCase().includes('c-101');
+          const rawMeasurements: any[] = (activeDoc as any).evidence?.measurements || [];
+
+          if (rawMeasurements.length === 0 && !isC101Demo) {
+            return (
+              <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
+                <h3 style={{ color: 'var(--text-muted)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
+                  NO TABULAR GAUGING DATA DETECTED
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                  No ultrasonic thickness gauging rows were identified in this document.
+                </p>
+              </div>
+            );
+          }
+
+          const displayRows: ThicknessSurveyRow[] = rawMeasurements.length > 0
+            ? rawMeasurements.map((m: any) => ({
+                cml_tag: m.cml_tag || 'CML',
+                location_desc: m.location_desc || 'Inspection Point',
+                nominal_mm: m.nominal_thickness_mm ?? (activeDoc as any).evidence?.nominal_thickness_mm ?? 0,
+                actual_mm: m.measured_thickness_mm,
+                loss_mm: m.loss_mm ?? (m.nominal_thickness_mm ? Math.round((m.nominal_thickness_mm - m.measured_thickness_mm) * 100) / 100 : 0),
+                date_measured: m.measurement_date || '—',
+              }))
+            : SAMPLE_SURVEY_DATA;
+
+          const minActual = Math.min(...displayRows.map(r => r.actual_mm));
+
+          return (
+            <div className="evidence-card survey-table-card">
+              {isC101Demo && rawMeasurements.length === 0 && (
+                <div style={{ padding: '0.5rem 1rem', background: 'rgba(56, 189, 248, 0.1)', borderBottom: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8' }}>DEMO PRESET: C-101 Corrosion Audit</span>
+                  <span className="badge-pill badge-neutral" style={{ fontSize: '0.65rem' }}>Sample Data</span>
+                </div>
+              )}
+              <div className="table-responsive">
+                <table className="deck-table">
+                  <thead>
+                    <tr>
+                      <th>CML</th>
+                      <th>Inspection Location</th>
+                      <th className="num-col">Nominal</th>
+                      <th className="num-col">Actual</th>
+                      <th className="num-col">Δt Loss</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayRows.map((row, idx) => {
+                      const isCritical = row.actual_mm === minActual;
+                      return (
+                        <tr key={`${row.cml_tag}-${idx}`} className={isCritical ? 'row-critical-highlight' : ''}>
+                          <td>
+                            <code className="cml-tag-badge">{row.cml_tag}</code>
+                          </td>
+                          <td className="location-desc-cell">{row.location_desc}</td>
+                          <td className="num-col mono-num">{row.nominal_mm > 0 ? `${row.nominal_mm.toFixed(2)} mm` : '—'}</td>
+                          <td className="num-col mono-num highlight-actual">{row.actual_mm.toFixed(2)} mm</td>
+                          <td className="num-col mono-num text-warning">{row.loss_mm > 0 ? `${row.loss_mm.toFixed(2)} mm` : '—'}</td>
+                          <td className="mono-date">{row.date_measured}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="table-footnote">
+                <span className="footnote-alert">CRITICAL CML:</span>
+                <span>Minimum measured wall thickness is {minActual.toFixed(2)} mm.</span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Sub-View: Extracted Engineering Parameters Card */}
-        {activeTab === 'params' && (
-          <div className="evidence-card params-card">
-            <div className="params-grid">
-              <div className="param-item">
-                <span className="param-label">EQUIPMENT TAG</span>
-                <code className="param-val">C-101</code>
+        {activeTab === 'params' && (() => {
+          if (!activeDoc) {
+            return (
+              <div className="evidence-card params-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                  No equipment parameters extracted. Parameters will populate automatically upon document ingestion.
+                </p>
               </div>
-              <div className="param-item">
-                <span className="param-label">COMPONENT</span>
-                <span className="param-val-text">Atmospheric Column Overhead Piping</span>
-              </div>
-              <div className="param-item">
-                <span className="param-label">MATERIAL SPECIFICATION</span>
-                <code className="param-val">ASTM A106 Gr. B (Class 150)</code>
-              </div>
-              <div className="param-item">
-                <span className="param-label">GOVERNING STANDARD</span>
-                <code className="param-val">API 570 / SOP-MRPL-PIP-001</code>
-              </div>
-              <div className="param-item">
-                <span className="param-label">NOMINAL THICKNESS (t_initial)</span>
-                <code className="param-val highlight-val">12.00 mm</code>
-              </div>
-              <div className="param-item">
-                <span className="param-label">CURRENT MINIMUM (t_actual)</span>
-                <code className="param-val highlight-val">10.10 mm (CML-4)</code>
-              </div>
-              <div className="param-item">
-                <span className="param-label">RETIREMENT THICKNESS (t_min)</span>
-                <code className="param-val text-warning">8.00 mm</code>
-              </div>
-              <div className="param-item">
-                <span className="param-label">ELAPSED SERVICE TIME (T)</span>
-                <code className="param-val">5.00 Years (2021-2026)</code>
+            );
+          }
+
+          const ev = (activeDoc as any).evidence;
+          const isC101 = activeDoc.filename.toLowerCase().includes('c101') || activeDoc.filename.toLowerCase().includes('c-101');
+
+          const eqTag = ev?.equipment_id || (isC101 ? 'C-101' : 'UNSPECIFIED');
+          const nomThick = ev?.nominal_thickness_mm != null ? `${ev.nominal_thickness_mm.toFixed(2)} mm` : (isC101 ? '12.00 mm' : 'UNAVAILABLE');
+          const curThick = ev?.current_thickness_mm != null ? `${ev.current_thickness_mm.toFixed(2)} mm` : (isC101 ? '10.10 mm' : 'UNAVAILABLE');
+          const minThick = ev?.minimum_required_thickness_mm != null ? `${ev.minimum_required_thickness_mm.toFixed(2)} mm` : (isC101 ? '8.00 mm' : 'UNAVAILABLE');
+          const elapsed = ev?.elapsed_time_years != null ? `${ev.elapsed_time_years} Years` : (isC101 ? '5.00 Years' : 'UNAVAILABLE');
+
+          return (
+            <div className="evidence-card params-card">
+              <div className="params-grid">
+                <div className="param-item">
+                  <span className="param-label">EQUIPMENT TAG</span>
+                  <code className="param-val">{eqTag}</code>
+                </div>
+                <div className="param-item">
+                  <span className="param-label">SOURCE DIGEST</span>
+                  <CopyableMono value={activeDoc.sha256} truncateLength={16} label="SHA-256" />
+                </div>
+                <div className="param-item">
+                  <span className="param-label">NOMINAL THICKNESS (t_initial)</span>
+                  <code className="param-val highlight-val">{nomThick}</code>
+                </div>
+                <div className="param-item">
+                  <span className="param-label">CURRENT MINIMUM (t_actual)</span>
+                  <code className="param-val highlight-val">{curThick}</code>
+                </div>
+                <div className="param-item">
+                  <span className="param-label">RETIREMENT THICKNESS (t_min)</span>
+                  <code className="param-val text-warning">{minThick}</code>
+                </div>
+                <div className="param-item">
+                  <span className="param-label">ELAPSED TIME (T)</span>
+                  <code className="param-val">{elapsed}</code>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Sub-View: Document Repository List */}
         {activeTab === 'archive' && (
           <div className="evidence-card doc-archive-card">
-            <div className="archive-list">
-              {documents.map((doc) => {
-                const isSelected = activeDoc?.sha256 === doc.sha256;
-                return (
-                  <div
-                    key={doc.sha256}
-                    className={`archive-item ${isSelected ? 'is-active-doc' : ''}`}
-                    onClick={() => {
-                      setActivePreviewDoc(doc);
-                      if (onSelectDoc) onSelectDoc(doc);
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div className="archive-item-top">
-                      <span className="archive-filename">{doc.filename}</span>
-                      <span className="archive-size">{(doc.size_bytes / 1024).toFixed(1)} KB</span>
+            {documents.length === 0 ? (
+              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                No documents in session repository. Upload a file above.
+              </div>
+            ) : (
+              <div className="archive-list">
+                {documents.map((doc) => {
+                  const isSelected = activeDoc?.sha256 === doc.sha256;
+                  const summaryText = typeof doc.extraction_summary === 'string'
+                    ? doc.extraction_summary
+                    : JSON.stringify(doc.extraction_summary, null, 2);
+                  return (
+                    <div
+                      key={doc.sha256}
+                      className={`archive-item ${isSelected ? 'is-active-doc' : ''}`}
+                      onClick={() => {
+                        setActivePreviewDoc(doc);
+                        if (onSelectDoc) onSelectDoc(doc);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="archive-item-top">
+                        <span className="archive-filename">{doc.filename}</span>
+                        <span className="archive-size">{(doc.size_bytes / 1024).toFixed(1)} KB</span>
+                      </div>
+                      <div className="archive-hash">
+                        <CopyableMono value={doc.sha256} truncateLength={24} label="SHA-256" />
+                      </div>
+                      <div className="archive-summary">{summaryText}</div>
                     </div>
-                    <div className="archive-hash">
-                      <CopyableMono value={doc.sha256} truncateLength={24} label="SHA-256" />
-                    </div>
-                    <div className="archive-summary">{doc.extraction_summary}</div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -3,6 +3,16 @@ SIH26117 — Sovereign On-Premise Agentic AI Workbench for MRPL
 FastAPI Application Entry Point & Central API Gateway
 """
 
+import sys
+from pathlib import Path
+
+# Ensure project root and backend are reliably on sys.path
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+for _p in (str(_PROJECT_ROOT), str(_BACKEND_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

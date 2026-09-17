@@ -127,6 +127,7 @@ class AgentStateMachineOrchestrator:
         task: str,
         task_id: Optional[str] = None,
         max_steps: Optional[int] = None,
+        evidence: Optional[Any] = None,
     ) -> AgentContext:
         """
         Execute an agent task through the deterministic 11-state lifecycle.
@@ -135,10 +136,17 @@ class AgentStateMachineOrchestrator:
         now = utc_now_iso()
         start_time = time.monotonic()
 
+        ev_dict = None
+        if evidence is not None:
+            ev_dict = evidence.model_dump() if hasattr(evidence, "model_dump") else (
+                evidence if isinstance(evidence, dict) else {"summary": str(evidence)}
+            )
+
         context = AgentContext(
             task_id=t_id,
             user_request=task.strip(),
             current_state=AgentState.IDLE,
+            evidence=ev_dict,
             started_at=now,
             updated_at=now,
         )

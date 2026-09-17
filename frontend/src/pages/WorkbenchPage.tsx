@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAgentTask } from '../hooks/useAgentTask';
+import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
 import { AgentGraphTrace } from '../components/AgentGraphTrace';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { DeliverablesPanel } from '../components/DeliverablesPanel';
@@ -7,7 +8,6 @@ import { DocumentViewer } from '../components/DocumentViewer';
 import { DocumentIngestionResult } from '../types/documents';
 import { GeneratedArtifact } from '../types/deliverables';
 import { systemService } from '../services/system';
-import { MOCK_INGESTED_DOCUMENTS } from '../services/mockData';
 import { DataSourceBadge } from '../components/DataSourceBadge';
 import { useToast } from '../components/ToastProvider';
 import {
@@ -61,32 +61,32 @@ export const WorkbenchPage: React.FC = () => {
     reset,
   } = useAgentTask();
 
+  const { runtimeState, activeModel } = useWorkbenchRuntime();
+
   const toast = useToast();
   const [taskInput, setTaskInput] = useState(PRESET_TASKS[0].query);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(PRESET_TASKS[0].equipmentId);
   const [maxSteps, setMaxSteps] = useState(8);
   const [executionMode, setExecutionMode] = useState<'deterministic' | 'live'>('deterministic');
-  const [configuredVisionModel, setConfiguredVisionModel] = useState<string>('qwen2.5vl:3b');
   const [configuredProvider, setConfiguredProvider] = useState<string>('Ollama');
   const [artifacts, setArtifacts] = useState<GeneratedArtifact[]>([]);
 
-  const activeArtifacts = deliverables.length > 0 ? deliverables : artifacts;
+  // Strict task isolation: only render deliverables belonging to the current task_id
+  const currentArtifacts = deliverables.filter((d) => !taskId || d.task_id === taskId);
 
   // Ingested documents state
-  const [documents, setDocuments] = useState<DocumentIngestionResult[]>(MOCK_INGESTED_DOCUMENTS);
-  const [selectedDoc, setSelectedDoc] = useState<DocumentIngestionResult>(documents[0]);
+  const [documents, setDocuments] = useState<DocumentIngestionResult[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<DocumentIngestionResult | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Dynamically load active configured model from backend / tier discovery (Never hardcode!)
+  // Dynamically load provider from tier discovery
   useEffect(() => {
     systemService
       .getModelTier()
       .then((tier) => {
         const vModel = tier?.models?.find((m) => m.role === 'vision' || m.role === 'reasoning');
-        if (vModel) {
-          setConfiguredVisionModel(vModel.model_tag);
-          if (vModel.provider) {
-            setConfiguredProvider(vModel.provider === 'ollama' ? 'Ollama' : vModel.provider);
-          }
+        if (vModel && vModel.provider) {
+          setConfiguredProvider(vModel.provider === 'ollama' ? 'Ollama' : vModel.provider);
         }
       })
       .catch(() => {
@@ -108,8 +108,10 @@ export const WorkbenchPage: React.FC = () => {
   const handleStartTask = useCallback(async () => {
     if (!taskInput.trim() || isRunning) return;
 
+    // Reset local artifacts cache before starting new task
+    setArtifacts([]);
     toast.info('Starting Task', `Executing in ${executionMode.toUpperCase()} mode...`);
-    const res = await executeTask(taskInput, maxSteps, executionMode, selectedEquipmentId);
+    const res = await executeTask(taskInput, maxSteps, executionMode, selectedEquipmentId, selectedFile);
 
     if (res) {
       toast.success(
@@ -119,7 +121,7 @@ export const WorkbenchPage: React.FC = () => {
     } else {
       toast.error('Task Encountered Failure', 'Check execution trace for details.');
     }
-  }, [taskInput, isRunning, executionMode, selectedEquipmentId, executeTask, toast]);
+  }, [taskInput, isRunning, executionMode, selectedEquipmentId, selectedFile, executeTask, toast]);
 
   // Keyboard shortcuts inside the Workbench (Enter to run, Esc to cancel/reset)
   useEffect(() => {
@@ -151,6 +153,8 @@ export const WorkbenchPage: React.FC = () => {
     if (preset) {
       setTaskInput(preset.query);
       setSelectedEquipmentId(preset.equipmentId);
+      setArtifacts([]);
+      reset();
     }
   };
 
@@ -200,7 +204,7 @@ export const WorkbenchPage: React.FC = () => {
                 className={`mode-btn ${executionMode === 'live' ? 'is-active' : ''}`}
                 onClick={() => setExecutionMode('live')}
                 disabled={isRunning}
-                title="Source: FastAPI + local Ollama (qwen2.5vl:3b)"
+                title="Source: FastAPI + local Ollama"
               >
                 Live Local Model
               </button>
@@ -228,7 +232,13 @@ export const WorkbenchPage: React.FC = () => {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={reset}
+              onClick={() => {
+                reset();
+                setArtifacts([]);
+                setSelectedFile(null);
+                setSelectedDoc(null);
+                setDocuments([]);
+              }}
               disabled={isRunning}
               title="Reset workbench state"
             >
@@ -293,7 +303,7 @@ export const WorkbenchPage: React.FC = () => {
               <span className="banner-sep">|</span>
               <span>Provider: <code>{configuredProvider}</code></span>
               <span className="banner-sep">|</span>
-              <span>Model Tag: <code>{configuredVisionModel}</code></span>
+              <span>Model Tag: <code>{activeModel}</code></span>
             </div>
             <div className="banner-right">
               <code>127.0.0.1 (On-Prem Loopback Sovereign)</code>
@@ -317,9 +327,12 @@ export const WorkbenchPage: React.FC = () => {
             documents={documents}
             selectedDoc={selectedDoc}
             onSelectDoc={setSelectedDoc}
-            onUploadSuccess={(doc) => {
+            onUploadSuccess={(doc, file) => {
               setDocuments((prev) => [doc, ...prev]);
               setSelectedDoc(doc);
+              if (file) {
+                setSelectedFile(file);
+              }
               toast.success('Document Uploaded', `Ingested ${doc.filename} (${doc.sha256.substring(0, 12)}...)`);
             }}
           />
@@ -347,10 +360,18 @@ export const WorkbenchPage: React.FC = () => {
             executionMode={executionMode}
           />
           <DeliverablesPanel
-            artifacts={activeArtifacts}
+            artifacts={currentArtifacts.length > 0 ? currentArtifacts : (taskId ? artifacts.filter(a => a.task_id === taskId) : [])}
             taskId={taskId}
+            executionCapability={runtimeState.executionCapability}
+            activeModel={activeModel}
+            sourceDocument={selectedDoc?.filename || selectedFile?.name || runtimeState.sourceDocument || 'pid_sample.png'}
+            visualFindingsCount={
+              typeof result?.summary === 'object' && (result.summary as any)?.findings_count !== undefined
+                ? (result.summary as any).findings_count
+                : undefined
+            }
             equipmentId={selectedEquipmentId}
-            summary={result?.summary || taskInput}
+            summary={typeof result?.summary === 'string' ? result.summary : taskInput}
             onGenerated={handleArtifactsGenerated}
             validationPassed={!!result?.structured_validation?.valid}
             executionMode={executionMode}

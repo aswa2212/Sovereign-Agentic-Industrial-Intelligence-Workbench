@@ -142,14 +142,28 @@ class StorageManager:
                 return None
         return None
 
-    def get_raw_file_path(self, sha256: str, filename: str) -> Optional[Path]:
+    def get_raw_file_path(self, sha256: str, filename: str = "") -> Optional[Path]:
         """Find raw file path if it exists."""
-        safe_name = sanitize_filename(filename)
-        target_path = self.raw_dir / f"{sha256}_{safe_name}"
-        if target_path.is_file():
-            return target_path
+        safe_name = sanitize_filename(filename) if filename else ""
+        if safe_name and safe_name != "unnamed_artifact":
+            target_path = self.raw_dir / f"{sha256}_{safe_name}"
+            if target_path.is_file():
+                return target_path
         # Search for any file matching sha256 prefix
         matches = list(self.raw_dir.glob(f"{sha256}_*"))
         if matches and matches[0].is_file():
             return matches[0]
         return None
+
+    def list_processed_documents(self) -> list:
+        """List all normalized document JSON artifacts on disk."""
+        results = []
+        if self.processed_dir.is_dir():
+            for p in sorted(self.processed_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        results.append(data)
+                except Exception:
+                    continue
+        return results

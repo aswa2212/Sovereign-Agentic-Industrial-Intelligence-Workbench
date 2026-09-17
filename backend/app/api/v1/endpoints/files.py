@@ -158,6 +158,19 @@ async def upload_document(
 
 
 @router.get(
+    "",
+    response_model=list[DocumentIngestionResult],
+    summary="List Ingested Documents",
+    description="Returns list of all uploaded and processed engineering documents stored locally.",
+)
+async def list_documents(
+    service: IngestionService = Depends(get_ingestion_service),
+) -> list[DocumentIngestionResult]:
+    """List all ingested documents available on disk."""
+    return service.list_documents()
+
+
+@router.get(
     "/{sha256}/status",
     summary="Get Processed Document Status",
     description="Fetches normalized document metadata and extraction status by SHA-256 identity.",
@@ -177,3 +190,33 @@ async def get_document_status(
             detail=f"No processed document found for SHA-256: {sha256}",
         )
     return doc
+
+
+@router.get(
+    "/{sha256}/raw",
+    summary="Download / Stream Raw File",
+    description="Stream raw uploaded document or schematic artifact for in-browser viewing.",
+)
+async def get_raw_file(
+    sha256: str,
+    service: IngestionService = Depends(get_ingestion_service),
+):
+    """Serve raw file bytes (PNG, PDF, XLSX, etc.) from local storage."""
+    from fastapi.responses import FileResponse
+    p = service.get_raw_file_path(sha256)
+    if not p or not p.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Raw file artifact not found for SHA-256: {sha256}",
+        )
+    ext = p.suffix.lower().lstrip(".")
+    media_map = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    media_type = media_map.get(ext, "application/octet-stream")
+    return FileResponse(p, media_type=media_type, filename=p.name)

@@ -56,7 +56,7 @@ class TestPhase16FailureSafetyGates:
         mgr = ModelManager(backend=unhealthy_backend, tier_config=mock_tier_config)
 
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
 
         result = await wf.run(req)
 
@@ -89,7 +89,7 @@ class TestPhase16FailureSafetyGates:
             mock_res.warnings = []
             mock_val.return_value = mock_res
 
-            req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC)
+            req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, is_demo_preset=True)
             result = await wf.run(req)
 
             assert result.status == WorkflowStatus.VALIDATION_FAILED
@@ -141,7 +141,7 @@ class TestPhase16FailureSafetyGates:
         wf = CorrosionAuditWorkflow(model_manager=mgr, audit_service=audit_svc)
         with patch.object(audit_svc, "check_sovereignty", return_value=fake_sov_status):
             with patch.object(audit_svc, "observe_network", return_value=fake_net_report):
-                req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC)
+                req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, is_demo_preset=True)
                 result = await wf.run(req)
 
                 assert result.status == WorkflowStatus.FAILED
@@ -158,6 +158,7 @@ class TestPhase16FailureSafetyGates:
         req = CorrosionAuditWorkflowRequest(
             execution_mode=WorkflowExecutionMode.DETERMINISTIC,
             requested_formats=["docx", "xlsx"],
+            is_demo_preset=True,
         )
 
         result = await wf.run(req)

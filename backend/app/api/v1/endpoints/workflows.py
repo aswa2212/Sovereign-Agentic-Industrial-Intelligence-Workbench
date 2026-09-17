@@ -53,9 +53,12 @@ async def run_corrosion_audit_workflow(
     objective: Optional[str] = Form(
         default="Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note."
     ),
-    component_id: Optional[str] = Form(default="C-101"),
+    component_id: Optional[str] = Form(default=None),
     mode: Optional[str] = Form(default="deterministic"),
+    is_demo: Optional[bool] = Form(default=False),
     formats: Optional[str] = Form(default="docx,xlsx"),
+    elapsed_time_years: Optional[float] = Form(default=None),
+    minimum_required_thickness_mm: Optional[float] = Form(default=None),
     timeout_seconds: Optional[float] = Form(default=120.0),
 ) -> CorrosionAuditWorkflowResult:
     """Trigger the complete Primary Corrosion Audit Workflow."""
@@ -83,10 +86,13 @@ async def run_corrosion_audit_workflow(
 
     request = CorrosionAuditWorkflowRequest(
         objective=objective or "Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note.",
-        document_filename=filename or "corrosion_inspection_c101.pdf",
+        document_filename=filename,
         execution_mode=exec_mode,
+        is_demo_preset=is_demo or False,
         requested_formats=requested_formats,
-        component_id=component_id or "C-101",
+        component_id=component_id,
+        elapsed_time_years=elapsed_time_years,
+        minimum_required_thickness_mm=minimum_required_thickness_mm,
     )
 
     try:

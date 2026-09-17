@@ -31,6 +31,10 @@ from app.services.audit.service import AuditService, get_audit_service
 from app.services.audit.sovereignty import SovereigntyChecker
 from app.services.deliverables.factory import DeliverablesFactory
 from app.services.deliverables.models import DeliverableFormat, ReportMetadata
+from app.services.ingestion.evidence import (
+    EngineeringEvidence,
+    EngineeringEvidenceExtractor,
+)
 from app.services.ingestion.models import ExtractionStatus
 from app.services.ingestion.service import IngestionService
 from app.services.integration.exceptions import (
@@ -95,9 +99,11 @@ class CorrosionAuditWorkflow:
         network_monitor: Optional[RuntimeNetworkMonitor] = None,
         ocr_engine: Optional[LocalOCREngine] = None,
         vision_engine: Optional[VisionEngine] = None,
+        evidence_extractor: Optional[EngineeringEvidenceExtractor] = None,
     ) -> None:
         self.settings = get_settings()
         self.ingestion_service = ingestion_service or IngestionService()
+        self.evidence_extractor = evidence_extractor or EngineeringEvidenceExtractor()
         self.router = router or RuleRouter()
         self.model_manager = model_manager or get_model_manager()
         self.retriever = retriever or SovereignRetriever()
@@ -154,6 +160,8 @@ class CorrosionAuditWorkflow:
 
         # Context containers across stages
         doc_summary: Dict[str, Any] = {}
+        evidence_dict: Optional[Dict[str, Any]] = None
+        evidence_obj: Optional[EngineeringEvidence] = None
         ocr_summary: Dict[str, Any] = {}
         routing_decision_dict: Optional[Dict[str, Any]] = None
         model_allocation_dict: Optional[Dict[str, Any]] = None
@@ -162,10 +170,12 @@ class CorrosionAuditWorkflow:
         validation_result_dict: Optional[Dict[str, Any]] = None
         deliverable_summaries: List[ArtifactSummary] = []
         agent_summary_dict: Optional[Dict[str, Any]] = None
+        execution_capability: Optional[str] = None
+        active_model: Optional[str] = None
         overall_status = WorkflowStatus.IN_PROGRESS
 
         try:
-            # ── 1. Document Ingestion ─────────────────────────────────────────
+            # ── 1. Document Ingestion & Evidence Extraction ───────────────────
             t_stage_start = time.monotonic()
             st_ingest = WorkflowStageTelemetry(
                 stage_name="document_ingestion",
@@ -177,30 +187,83 @@ class CorrosionAuditWorkflow:
             try:
                 # Resolve document bytes
                 raw_pdf = pdf_bytes
-                filename = request.document_filename or "corrosion_inspection_c101.pdf"
+                filename = request.document_filename
 
                 if raw_pdf is None:
-                    # Load bundled sample if not uploaded in payload
-                    sample_path = (
-                        self.settings.project_root
-                        / "data"
-                        / "samples"
-                        / filename
-                    )
-                    if not sample_path.is_file():
-                        raise DocumentIngestionStageError(
-                            f"Specified document '{filename}' was not found at {sample_path} and no bytes provided."
+                    if request.is_demo_preset:
+                        # Explicit demo preset path: allow loading bundled C-101 sample
+                        filename = filename or "corrosion_inspection_c101.pdf"
+                        sample_path = (
+                            self.settings.project_root
+                            / "data"
+                            / "samples"
+                            / filename
                         )
-                    raw_pdf = sample_path.read_bytes()
+                        if not sample_path.is_file():
+                            raise DocumentIngestionStageError(
+                                f"Specified demo document '{filename}' was not found at {sample_path}."
+                            )
+                        raw_pdf = sample_path.read_bytes()
+                    elif filename:
+                        sample_path = (
+                            self.settings.project_root
+                            / "data"
+                            / "samples"
+                            / filename
+                        )
+                        if not sample_path.is_file():
+                            raise DocumentIngestionStageError(
+                                f"Requested document not found: {filename} at {sample_path}."
+                            )
+                        raw_pdf = sample_path.read_bytes()
+                    else:
+                        raise DocumentIngestionStageError(
+                            "Document input required: No document uploaded and is_demo_preset is False."
+                        )
+                elif not filename:
+                    filename = "uploaded_inspection_document.pdf"
 
                 # Execute ingestion
                 ingest_res = self.ingestion_service.ingest_file(raw_pdf, filename)
-                if ingest_res.status != ExtractionStatus.SUCCESS or not ingest_res.normalized_document:
+                if ingest_res.status in (ExtractionStatus.FAILED, ExtractionStatus.UNSUPPORTED) or not ingest_res.normalized_document:
+                    err_msg = ", ".join(ingest_res.errors) if ingest_res.errors else f"status {ingest_res.status.value}"
                     raise DocumentIngestionStageError(
-                        f"Document ingestion failed with status {ingest_res.status.value}: {ingest_res.error_message}"
+                        f"Document ingestion failed with status {ingest_res.status.value}: {err_msg}"
                     )
 
                 norm_doc = ingest_res.normalized_document
+
+                # ── Engineering Evidence Extraction ─────────────────────────
+                evidence = self.evidence_extractor.extract(
+                    norm_doc=norm_doc,
+                    user_equipment_id=request.component_id,
+                    user_elapsed_time_years=request.elapsed_time_years,
+                    user_minimum_required_thickness_mm=request.minimum_required_thickness_mm,
+                    is_demo_preset=request.is_demo_preset,
+                )
+
+                if request.is_demo_preset:
+                    if evidence.nominal_thickness_mm is None:
+                        evidence.nominal_thickness_mm = 12.0
+                        evidence.nominal_thickness_source = "DEMO_PRESET"
+                    if evidence.current_thickness_mm is None:
+                        evidence.current_thickness_mm = 10.1
+                        evidence.current_thickness_source = "DEMO_PRESET"
+                    if evidence.elapsed_time_years is None:
+                        evidence.elapsed_time_years = 5.0
+                        evidence.elapsed_time_source = "DEMO_PRESET"
+                    if evidence.minimum_required_thickness_mm is None:
+                        evidence.minimum_required_thickness_mm = 8.0
+                        evidence.minimum_thickness_source = "DEMO_PRESET"
+                    if evidence.equipment_id is None:
+                        evidence.equipment_id = "C-101"
+                        evidence.equipment_id_source = "DEMO_PRESET"
+                    evidence.can_calculate_corrosion_rate = True
+                    evidence.can_calculate_remaining_life = True
+
+                evidence_obj = evidence
+                evidence_dict = evidence.model_dump()
+
                 doc_summary = {
                     "document_id": norm_doc.document_id,
                     "filename": filename,
@@ -208,8 +271,15 @@ class CorrosionAuditWorkflow:
                     "page_count": len(norm_doc.pages),
                     "table_count": len(norm_doc.tables),
                     "is_scanned": any(p.is_scanned for p in norm_doc.pages) if norm_doc.pages else False,
-                    "equipment_id": request.component_id,
+                    "equipment_id": evidence.equipment_id or request.component_id,
+                    "evidence": evidence_dict,
                 }
+
+                if evidence.conflict_detected:
+                    raise IntegrationError(
+                        f"EVIDENCE_CONFLICT: {evidence.conflict_details}",
+                        stage="evidence_extraction",
+                    )
 
                 st_ingest.status = StageStatus.SUCCESS
                 st_ingest.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
@@ -253,11 +323,12 @@ class CorrosionAuditWorkflow:
                             stage="ocr_vision_analysis",
                         )
 
-                    # Determine image bytes for visual analysis
+                    # Determine image bytes for visual analysis (Finding 1: strict provenance)
                     img_bytes: Optional[bytes] = None
-                    if pdf_bytes and any(filename.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg")):
-                        img_bytes = pdf_bytes
-                    else:
+                    is_demo_fixture = False
+
+                    if request.is_demo_preset:
+                        # Demo preset ONLY: bundled sample image may be used with explicit DEMO provenance
                         pid_sample_path = self.settings.project_root / "data" / "samples" / "pid_sample.png"
                         if pid_sample_path.is_file():
                             img_bytes = pid_sample_path.read_bytes()
@@ -266,34 +337,81 @@ class CorrosionAuditWorkflow:
                             buf = io.BytesIO()
                             img.save(buf, format="PNG")
                             img_bytes = buf.getvalue()
+                        is_demo_fixture = True
+                        prov = DocumentProvenance(
+                            source_filename="pid_sample.png (DEMO PRESET)",
+                            source_sha256="demo_preset_fixture",
+                            page_number=1,
+                        )
+                    elif pdf_bytes and any(filename.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg")):
+                        # CASE 1: Uploaded file is already an image (.png/.jpg/.jpeg)
+                        img_bytes = pdf_bytes
+                    elif pdf_bytes and filename.lower().endswith(".pdf"):
+                        # CASE 2: Uploaded file is PDF -> render first page using pypdfium2
+                        try:
+                            import pypdfium2
+                            pdf_doc = pypdfium2.PdfDocument(pdf_bytes)
+                            if len(pdf_doc) > 0:
+                                pil_img = pdf_doc[0].render(scale=1.5).to_pil()
+                                buf = io.BytesIO()
+                                pil_img.save(buf, format="PNG")
+                                img_bytes = buf.getvalue()
+                        except Exception as render_err:
+                            logger.warning("PDF vision rendering unavailable: %s", render_err)
+                            img_bytes = None
+                    else:
+                        # CASE 3: Uploaded file is DOCX/XLSX/CSV/text/etc. -> No visual analysis
+                        img_bytes = None
 
-                    # Execute real VLM inference via ModelManager abstraction
-                    vlm_res = await self.vision_engine.analyze_schematic(img_bytes, provenance=prov)
+                    if img_bytes is not None:
+                        # Execute real VLM inference via ModelManager abstraction
+                        vlm_res = await self.vision_engine.analyze_schematic(img_bytes, provenance=prov)
 
-                    ocr_summary = {
-                        "engine_name": "local_vlm",
-                        "model_used": vlm_res.model_used,
-                        "provider": "ollama",
-                        "findings_count": len(vlm_res.findings),
-                        "equipment_tags": vlm_res.equipment_tags,
-                        "instrument_tags": vlm_res.instrument_tags,
-                        "summary": vlm_res.summary,
-                        "status": vlm_res.status,
-                        "degraded": False,
-                    }
-                    self._safe_audit(
-                        AuditEventType.MODEL_INVOKED,
-                        action=f"Live VLM inference executed via ModelManager ({vlm_res.model_used})",
-                        task_id=task_id,
-                        model_role="vision",
-                        metadata={
-                            "model": vlm_res.model_used,
+                        ocr_summary = {
+                            "engine_name": "local_vlm",
+                            "model_used": vlm_res.model_used,
+                            "provider": "ollama",
                             "findings_count": len(vlm_res.findings),
                             "equipment_tags": vlm_res.equipment_tags,
                             "instrument_tags": vlm_res.instrument_tags,
-                        },
-                    )
-                    st_vision.status = StageStatus.SUCCESS
+                            "summary": vlm_res.summary,
+                            "status": vlm_res.status,
+                            "degraded": False,
+                            "is_demo_fixture": is_demo_fixture,
+                        }
+                        self._safe_audit(
+                            AuditEventType.MODEL_INVOKED,
+                            action=f"Live VLM inference executed via ModelManager ({vlm_res.model_used})",
+                            task_id=task_id,
+                            model_role="vision",
+                            metadata={
+                                "model": vlm_res.model_used,
+                                "findings_count": len(vlm_res.findings),
+                                "equipment_tags": vlm_res.equipment_tags,
+                                "instrument_tags": vlm_res.instrument_tags,
+                                "is_demo_fixture": is_demo_fixture,
+                            },
+                        )
+                        st_vision.status = StageStatus.SUCCESS
+                    else:
+                        # Non-visual or unrenderable upload -> Explicitly SKIP vision stage (never load pid_sample.png)
+                        skip_reason = (
+                            "PDF vision rendering unavailable"
+                            if filename.lower().endswith(".pdf")
+                            else f"Document type ({Path(filename).suffix or 'unknown'}) does not require visual schematic analysis"
+                        )
+                        ocr_summary = {
+                            "engine_name": "local_vlm",
+                            "status": StageStatus.SKIPPED.value,
+                            "reason": skip_reason,
+                            "findings_count": 0,
+                            "equipment_tags": [],
+                            "instrument_tags": [],
+                            "summary": f"Vision analysis skipped: {skip_reason}. Engineering evidence path active.",
+                            "degraded": False,
+                            "is_demo_fixture": False,
+                        }
+                        st_vision.status = StageStatus.SKIPPED
                 else:
                     img = Image.new("RGB", (300, 150), color=(255, 255, 255))
                     buf = io.BytesIO()
@@ -396,8 +514,9 @@ class CorrosionAuditWorkflow:
             model_allocation_dict = {
                 "assigned_role": role_key,
                 "tier_role": mapped_role,
-                "assigned_model_tag": model_entry.model_tag if model_entry else "default_reasoning",
-                "vision_model_tag": vision_entry.model_tag if vision_entry else "qwen2.5vl:3b",
+                "assigned_model_tag": model_entry.model_tag if model_entry else None,
+                "vision_model_tag": vision_entry.model_tag if vision_entry else None,
+                "resolved_model_tag": model_entry.model_tag if model_entry else None,
                 "provider": "ollama" if request.execution_mode == WorkflowExecutionMode.LIVE else "mock",
                 "available_models_count": models_count,
                 "is_mock": True if request.execution_mode == WorkflowExecutionMode.DETERMINISTIC else False,
@@ -409,272 +528,418 @@ class CorrosionAuditWorkflow:
             st_model.details = model_allocation_dict
             stages_telemetry.append(st_model)
 
-            # ── 5. Sovereign Knowledge / RAG Retrieval ────────────────────────
-            t_stage_start = time.monotonic()
-            st_rag = WorkflowStageTelemetry(
-                stage_name="knowledge_retrieval",
-                stage_index=4,
-                status=StageStatus.IN_PROGRESS,
-                started_at=utc_now_iso(),
+            # Branch execution based on routed capability / model role
+            is_vision_task = (
+                role_key.lower() == "vision"
+                or mapped_role == "vision"
+                or getattr(route_decision.model_role, "value", str(route_decision.model_role)).lower() == "vision"
             )
 
-            rag_query = f"{request.component_id} minimum wall thickness corrosion rate retirement limits SOP API 570"
-            retrieved_chunks, source_citations = await self.retriever.retrieve_with_citations(
-                query=rag_query,
-                top_k=2,
-                threshold=0.60,
-            )
+            if is_vision_task:
+                execution_capability = "vision"
+                active_model = model_allocation_dict.get("vision_model_tag") or (vision_entry.model_tag if vision_entry else None)
 
-            # Convert to dictionary serialization for telemetry
-            rag_citations = [c.model_dump() for c in source_citations]
-            st_rag.status = StageStatus.SUCCESS
-            st_rag.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
-            st_rag.completed_at = utc_now_iso()
-            st_rag.details = {
-                "query": rag_query,
-                "retrieved_chunks_count": len(retrieved_chunks),
-                "citations_count": len(source_citations),
-                "top_source": source_citations[0].source_document if source_citations else None,
-            }
-            stages_telemetry.append(st_rag)
+                # ── 5. Knowledge Retrieval (SKIPPED for vision-only) ─────────
+                st_rag = WorkflowStageTelemetry(
+                    stage_name="knowledge_retrieval",
+                    stage_index=4,
+                    status=StageStatus.SKIPPED,
+                    duration_ms=0.0,
+                    started_at=utc_now_iso(),
+                    completed_at=utc_now_iso(),
+                    details={"reason": "Knowledge retrieval bypassed for visual-only inspection."},
+                )
+                stages_telemetry.append(st_rag)
+                rag_citations = []
 
-            # ── 6. Agent State Machine Orchestration ──────────────────────────
-            t_stage_start = time.monotonic()
-            st_agent = WorkflowStageTelemetry(
-                stage_name="agent_orchestration",
-                stage_index=5,
-                status=StageStatus.IN_PROGRESS,
-                started_at=utc_now_iso(),
-            )
+                # ── 6. Agent State Machine (Visual findings summary) ─────────
+                t_stage_start = time.monotonic()
+                st_agent = WorkflowStageTelemetry(
+                    stage_name="agent_orchestration",
+                    stage_index=5,
+                    status=StageStatus.SUCCESS,
+                    started_at=utc_now_iso(),
+                    completed_at=utc_now_iso(),
+                    duration_ms=round((time.monotonic() - t_stage_start) * 1000, 2),
+                    details={
+                        "final_state": "DELIVER",
+                        "findings_count": ocr_summary.get("findings_count", 0),
+                        "capability": "vision",
+                    },
+                )
+                stages_telemetry.append(st_agent)
+                agent_summary_dict = {
+                    "final_state": "DELIVER",
+                    "steps_executed": 1,
+                    "plan_steps": 1,
+                    "observations_count": ocr_summary.get("findings_count", 0),
+                    "capability": "vision",
+                }
 
-            # Run agent task to drive the state machine lifecycle
-            agent_ctx: AgentContext = await self.agent_orchestrator.execute_task(
-                task=request.objective,
-                task_id=task_id,
-            )
+                # ── 7. Sandboxed Calculation (SKIPPED - do NOT run corrosion calc)
+                st_sandbox = WorkflowStageTelemetry(
+                    stage_name="sandboxed_calculation",
+                    stage_index=6,
+                    status=StageStatus.SKIPPED,
+                    duration_ms=0.0,
+                    started_at=utc_now_iso(),
+                    completed_at=utc_now_iso(),
+                    details={"reason": "Corrosion rate calculations not requested for visual-only task."},
+                )
+                stages_telemetry.append(st_sandbox)
+                calc_result_dict = None
 
-            agent_summary_dict = {
-                "final_state": agent_ctx.current_state.value,
-                "steps_executed": agent_ctx.step_count,
-                "plan_steps": len(agent_ctx.plan.steps) if agent_ctx.plan else 0,
-                "observations_count": len(agent_ctx.observations),
-            }
+                # ── 8. Engineering Validation Gate (SKIPPED - do NOT run validation)
+                st_validation = WorkflowStageTelemetry(
+                    stage_name="engineering_validation_gate",
+                    stage_index=7,
+                    status=StageStatus.SKIPPED,
+                    duration_ms=0.0,
+                    started_at=utc_now_iso(),
+                    completed_at=utc_now_iso(),
+                    details={"reason": "Corrosion engineering validation gate not requested for visual-only task."},
+                )
+                stages_telemetry.append(st_validation)
+                validation_result_dict = None
 
-            st_agent.status = StageStatus.SUCCESS
-            st_agent.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
-            st_agent.completed_at = utc_now_iso()
-            st_agent.details = agent_summary_dict
-            stages_telemetry.append(st_agent)
+                # ── 9. Deliverables Factory (SKIPPED - do NOT generate DOCX/XLSX)
+                st_deliverables = WorkflowStageTelemetry(
+                    stage_name="deliverables_factory",
+                    stage_index=8,
+                    status=StageStatus.SKIPPED,
+                    duration_ms=0.0,
+                    started_at=utc_now_iso(),
+                    completed_at=utc_now_iso(),
+                    details={
+                        "artifacts_count": 0,
+                        "reason": "Visual analysis completed. Engineering calculation and reports not requested.",
+                    },
+                )
+                stages_telemetry.append(st_deliverables)
+                deliverable_summaries = []
 
-            # ── 7. Sandboxed Engineering Calculation ─────────────────────────
-            t_stage_start = time.monotonic()
-            st_sandbox = WorkflowStageTelemetry(
-                stage_name="sandboxed_calculation",
-                stage_index=6,
-                status=StageStatus.IN_PROGRESS,
-                started_at=utc_now_iso(),
-            )
+            else:
+                execution_capability = getattr(route_decision.capability, "value", str(route_decision.capability))
+                active_model = model_allocation_dict.get("assigned_model_tag") or (model_entry.model_tag if model_entry else None)
 
-            # Values derived from C-101 inspection sheet:
-            # Baseline nominal: 12.0 mm
-            # Lowest measured ultrasonic thickness: 10.1 mm
-            # Operating interval: 5.0 years
-            # Minimum required retirement thickness: 8.0 mm
-            initial_t = 12.0
-            current_t = 10.1
-            interval_yrs = request.elapsed_time_years or 5.0
-            min_req_t = request.minimum_required_thickness_mm or 8.0
-
-            calc_req = ToolExecutionRequest(
-                tool_name="corrosion_rate_calc",
-                input={
-                    "component_id": request.component_id,
-                    "previous_thickness_mm": initial_t,
-                    "current_thickness_mm": current_t,
-                    "elapsed_time_years": interval_yrs,
-                    "minimum_required_mm": min_req_t,
-                },
-                execution_mode="subprocess",
-            )
-            calc_resp = await self.sandbox_executor.execute_tool(calc_req)
-
-            if calc_resp.status != ExecutionStatus.SUCCESS or not calc_resp.structured_result:
-                raise IntegrationError(
-                    f"Sandboxed corrosion rate calculation failed: {calc_resp.error_message}",
-                    stage="sandbox",
+                # ── 5. Sovereign Knowledge / RAG Retrieval ────────────────────────
+                t_stage_start = time.monotonic()
+                st_rag = WorkflowStageTelemetry(
+                    stage_name="knowledge_retrieval",
+                    stage_index=4,
+                    status=StageStatus.IN_PROGRESS,
+                    started_at=utc_now_iso(),
                 )
 
-            # Also verify wall thickness margin check
-            margin_req = ToolExecutionRequest(
-                tool_name="minimum_wall_thickness_check",
-                input={
-                    "component_id": request.component_id,
-                    "measured_thickness_mm": current_t,
-                    "minimum_required_mm": min_req_t,
-                },
-                execution_mode="subprocess",
-            )
-            margin_resp = await self.sandbox_executor.execute_tool(margin_req)
-
-            calc_result_dict = calc_resp.structured_result
-            calc_result_dict["margin_check"] = margin_resp.structured_result or {}
-
-            st_sandbox.status = StageStatus.SUCCESS
-            st_sandbox.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
-            st_sandbox.completed_at = utc_now_iso()
-            st_sandbox.details = calc_result_dict
-            stages_telemetry.append(st_sandbox)
-
-            # ── 8. Fail-Closed Validation Gate ───────────────────────────────
-            t_stage_start = time.monotonic()
-            st_validation = WorkflowStageTelemetry(
-                stage_name="engineering_validation_gate",
-                stage_index=7,
-                status=StageStatus.IN_PROGRESS,
-                started_at=utc_now_iso(),
-            )
-
-            # Build grounded CorrosionAuditResult
-            corrosion_calc = CorrosionCalculation(
-                initial_thickness_mm=initial_t,
-                current_thickness_mm=current_t,
-                inspection_interval_years=interval_yrs,
-                minimum_required_mm=min_req_t,
-                corrosion_rate_mm_per_year=calc_result_dict["corrosion_rate_mm_per_year"],
-                remaining_life_years=calc_result_dict.get("remaining_life_years"),
-                formula_applied="corrosion_rate = (initial - current) / interval; remaining_life = (current - min_req) / rate",
-            )
-
-            # Build validated citations list from retrieved RAG citations
-            pydantic_citations = [
-                SourceCitation(
-                    source_document=c.source_document,
-                    page_number=c.page_number,
-                    chunk_id=c.chunk_id,
-                    content_sha256=c.content_sha256,
-                    similarity_score=c.similarity_score,
+                rag_query = f"{request.component_id} minimum wall thickness corrosion rate retirement limits SOP API 570"
+                retrieved_chunks, source_citations = await self.retriever.retrieve_with_citations(
+                    query=rag_query,
+                    top_k=2,
+                    threshold=0.60,
                 )
-                for c in source_citations
-            ]
-            if not pydantic_citations:
-                # If RAG returned empty, preserve provenance integrity with standard citation
+
+                # Convert to dictionary serialization for telemetry
+                rag_citations = [c.model_dump() for c in source_citations]
+                st_rag.status = StageStatus.SUCCESS
+                st_rag.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                st_rag.completed_at = utc_now_iso()
+                st_rag.details = {
+                    "query": rag_query,
+                    "retrieved_chunks_count": len(retrieved_chunks),
+                    "citations_count": len(source_citations),
+                    "top_source": source_citations[0].source_document if source_citations else None,
+                }
+                stages_telemetry.append(st_rag)
+
+                # ── 6. Agent State Machine Orchestration ──────────────────────────
+                t_stage_start = time.monotonic()
+                st_agent = WorkflowStageTelemetry(
+                    stage_name="agent_orchestration",
+                    stage_index=5,
+                    status=StageStatus.IN_PROGRESS,
+                    started_at=utc_now_iso(),
+                )
+
+                # Run agent task to drive the state machine lifecycle
+                agent_ctx: AgentContext = await self.agent_orchestrator.execute_task(
+                    task=request.objective,
+                    task_id=task_id,
+                    evidence=evidence_dict,
+                )
+
+                agent_summary_dict = {
+                    "final_state": agent_ctx.current_state.value,
+                    "steps_executed": agent_ctx.step_count,
+                    "plan_steps": len(agent_ctx.plan.steps) if agent_ctx.plan else 0,
+                    "observations_count": len(agent_ctx.observations),
+                }
+
+                if agent_ctx.current_state.value == "FAILED":
+                    st_agent.status = StageStatus.FAILED
+                    st_agent.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                    st_agent.completed_at = utc_now_iso()
+                    st_agent.details = agent_summary_dict
+                    stages_telemetry.append(st_agent)
+                    self._safe_audit(
+                        AuditEventType.TASK_FAILED,
+                        action=f"Agent reached FAILED state for {evidence_obj.equipment_id if evidence_obj else request.component_id}",
+                        task_id=task_id,
+                        status="FAILED",
+                        metadata=agent_summary_dict,
+                    )
+                    raise IntegrationError(
+                        "Agent execution failed: current_state is FAILED. Downstream calculation and deliverables halted.",
+                        stage="agent_orchestration",
+                    )
+
+                st_agent.status = StageStatus.SUCCESS
+                st_agent.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                st_agent.completed_at = utc_now_iso()
+                st_agent.details = agent_summary_dict
+                stages_telemetry.append(st_agent)
+
+                # ── 7. Sandboxed Engineering Calculation ─────────────────────────
+                t_stage_start = time.monotonic()
+                st_sandbox = WorkflowStageTelemetry(
+                    stage_name="sandboxed_calculation",
+                    stage_index=6,
+                    status=StageStatus.IN_PROGRESS,
+                    started_at=utc_now_iso(),
+                )
+
+                # Values derived from Engineering Evidence (provenance-backed):
+                assert evidence_obj is not None, "Engineering evidence must be established prior to calculation"
+                if not evidence_obj.can_calculate_corrosion_rate:
+                    raise IntegrationError(
+                        f"INSUFFICIENT_EVIDENCE: Missing required fields {evidence_obj.missing_fields} to compute corrosion rate.",
+                        stage="sandboxed_calculation",
+                    )
+
+                initial_t = evidence_obj.nominal_thickness_mm
+                current_t = evidence_obj.current_thickness_mm
+                interval_yrs = evidence_obj.elapsed_time_years
+                min_req_t = evidence_obj.minimum_required_thickness_mm
+                comp_id = evidence_obj.equipment_id or request.component_id or "EQUIPMENT"
+
+                calc_req = ToolExecutionRequest(
+                    tool_name="corrosion_rate_calc",
+                    input={
+                        "component_id": comp_id,
+                        "previous_thickness_mm": initial_t,
+                        "current_thickness_mm": current_t,
+                        "elapsed_time_years": interval_yrs,
+                        "minimum_required_mm": min_req_t,
+                    },
+                    execution_mode="subprocess",
+                )
+                calc_resp = await self.sandbox_executor.execute_tool(calc_req)
+
+                if calc_resp.status != ExecutionStatus.SUCCESS or not calc_resp.structured_result:
+                    raise IntegrationError(
+                        f"Sandboxed corrosion rate calculation failed: {calc_resp.error_message}",
+                        stage="sandbox",
+                    )
+
+                calc_result_dict = calc_resp.structured_result
+
+                # Check minimum wall thickness margin check if threshold is present
+                if min_req_t is not None:
+                    margin_req = ToolExecutionRequest(
+                        tool_name="minimum_wall_thickness_check",
+                        input={
+                            "component_id": comp_id,
+                            "measured_thickness_mm": current_t,
+                            "minimum_required_mm": min_req_t,
+                        },
+                        execution_mode="subprocess",
+                    )
+                    margin_resp = await self.sandbox_executor.execute_tool(margin_req)
+                    calc_result_dict["margin_check"] = margin_resp.structured_result or {}
+                else:
+                    calc_result_dict["margin_check"] = {
+                        "status": "INSUFFICIENT_EVIDENCE",
+                        "message": "Minimum retirement thickness threshold unavailable.",
+                    }
+
+                st_sandbox.status = StageStatus.SUCCESS
+                st_sandbox.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                st_sandbox.completed_at = utc_now_iso()
+                st_sandbox.details = calc_result_dict
+                stages_telemetry.append(st_sandbox)
+
+                # ── 8. Fail-Closed Validation Gate ───────────────────────────────
+                t_stage_start = time.monotonic()
+                st_validation = WorkflowStageTelemetry(
+                    stage_name="engineering_validation_gate",
+                    stage_index=7,
+                    status=StageStatus.IN_PROGRESS,
+                    started_at=utc_now_iso(),
+                )
+
+                # Build grounded CorrosionAuditResult
+                corrosion_calc = CorrosionCalculation(
+                    initial_thickness_mm=initial_t,
+                    current_thickness_mm=current_t,
+                    inspection_interval_years=interval_yrs,
+                    minimum_required_mm=min_req_t,
+                    corrosion_rate_mm_per_year=calc_result_dict["corrosion_rate_mm_per_year"],
+                    remaining_life_years=calc_result_dict.get("remaining_life_years"),
+                    formula_applied="corrosion_rate = (initial - current) / interval; remaining_life = (current - min_req) / rate",
+                )
+
+                # Build validated citations list from retrieved RAG citations
                 pydantic_citations = [
                     SourceCitation(
-                        source_document="SOP-MRPL-PIP-001.pdf",
-                        page_number=3,
+                        source_document=c.source_document,
+                        page_number=c.page_number,
+                        chunk_id=c.chunk_id,
+                        content_sha256=c.content_sha256,
+                        similarity_score=c.similarity_score,
                     )
+                    for c in source_citations
                 ]
 
-            audit_payload = CorrosionAuditResult(
-                task_id=task_id,
-                equipment_id=request.component_id,
-                inspection_subject=f"Atmospheric Column {request.component_id} Overhead Condenser Ultrasonic Survey",
-                current_measurement=WallThicknessMeasurement(
-                    value_mm=current_t,
-                    measurement_date="2026-03-15",
-                    location_tag=f"{request.component_id}-CML-4",
-                ),
-                initial_measurement=WallThicknessMeasurement(
-                    value_mm=initial_t,
-                    measurement_date="2021-03-15",
-                    location_tag=f"{request.component_id}-NOMINAL",
-                ),
-                minimum_required_thickness_mm=min_req_t,
-                calculation=corrosion_calc,
-                findings=[
-                    InspectionFinding(
-                        finding_id="F-01",
-                        description=f"Ultrasonic thickness survey identified localized thinning to {current_t}mm at CML-4.",
-                        severity="MEDIUM",
-                        supporting_citation=pydantic_citations[0],
+                # Prepend primary citation from uploaded inspection evidence
+                primary_citation = SourceCitation(
+                    source_document=evidence_obj.source_filename,
+                    page_number=evidence_obj.source_page or 1,
+                    content_sha256=evidence_obj.source_sha256,
+                    excerpt=(
+                        f"Extracted measurement: {evidence_obj.selected_measurement.location_desc} = {current_t} mm "
+                        f"(Nominal: {initial_t} mm, Interval: {interval_yrs} yrs)"
+                        if evidence_obj.selected_measurement
+                        else f"Measured thickness: {current_t} mm"
+                    ),
+                )
+                all_citations = [primary_citation] + pydantic_citations
+
+                if min_req_t is not None and calc_result_dict.get("remaining_life_years") is not None:
+                    rem_life = calc_result_dict.get("remaining_life_years")
+                    margin_mm = round(current_t - min_req_t, 2)
+                    conclusion_text = (
+                        f"Equipment wall thickness ({current_t} mm) exceeds minimum retirement limit "
+                        f"({min_req_t} mm) with a remaining margin of +{margin_mm} mm. "
+                        f"Estimated remaining service life is {rem_life} years."
                     )
-                ],
-                conclusion=(
-                    f"Equipment wall thickness ({current_t} mm) exceeds minimum retirement limit "
-                    f"({min_req_t} mm) with a remaining margin of +{round(current_t - min_req_t, 2)} mm. "
-                    f"Estimated remaining service life is {calc_result_dict.get('remaining_life_years')} years."
-                ),
-                recommendation=RecommendationCode.CONTINUE_SERVICE,
-                citations=pydantic_citations,
-                confidence=0.95,
-            )
+                    rec_code = RecommendationCode.CONTINUE_SERVICE if margin_mm >= 0 else RecommendationCode.RETIRE_FROM_SERVICE
+                else:
+                    conclusion_text = (
+                        f"Calculated corrosion rate is {calc_result_dict['corrosion_rate_mm_per_year']} mm/year "
+                        f"based on initial thickness {initial_t} mm and current measured thickness {current_t} mm "
+                        f"over {interval_yrs} years. Remaining operational life assessment is INSUFFICIENT_EVIDENCE "
+                        f"(minimum required retirement thickness threshold was not provided in evidence)."
+                    )
+                    rec_code = RecommendationCode.INSUFFICIENT_DATA
 
-            # Execute validation pipeline
-            val_res: ValidationResult = self.validation_service.validate(audit_payload.model_dump())
-            validation_result_dict = {
-                "valid": val_res.valid,
-                "status": val_res.status,
-                "checks_passed": val_res.checks_passed,
-                "checks_failed": val_res.checks_failed,
-                "warnings": val_res.warnings,
-            }
+                audit_payload = CorrosionAuditResult(
+                    task_id=task_id,
+                    equipment_id=comp_id,
+                    inspection_subject=evidence_obj.inspection_subject or f"Equipment {comp_id} Ultrasonic Survey",
+                    current_measurement=WallThicknessMeasurement(
+                        value_mm=current_t,
+                        measurement_date=evidence_obj.selected_measurement.measurement_date if evidence_obj.selected_measurement else None,
+                        location_tag=evidence_obj.selected_measurement.cml_tag if evidence_obj.selected_measurement else f"{comp_id}-CRITICAL",
+                    ),
+                    initial_measurement=WallThicknessMeasurement(
+                        value_mm=initial_t,
+                        measurement_date=None,
+                        location_tag=f"{comp_id}-NOMINAL",
+                    ),
+                    minimum_required_thickness_mm=min_req_t,
+                    calculation=corrosion_calc,
+                    findings=[
+                        InspectionFinding(
+                            finding_id="F-01",
+                            description=(
+                                f"Ultrasonic survey identified governing wall thickness of {current_t} mm at "
+                                f"{evidence_obj.selected_measurement.location_desc if evidence_obj.selected_measurement else 'critical location'}."
+                            ),
+                            severity="MEDIUM",
+                            supporting_citation=primary_citation,
+                        )
+                    ],
+                    conclusion=conclusion_text,
+                    recommendation=rec_code,
+                    citations=all_citations,
+                    confidence=0.95,
+                )
 
-            if not val_res.valid or val_res.status != "VALID":
-                st_validation.status = StageStatus.FAILED
-                st_validation.error = f"Validation gate rejected result: {', '.join(val_res.checks_failed)}"
+                # Execute validation pipeline
+                val_res: ValidationResult = self.validation_service.validate(audit_payload.model_dump())
+                validation_result_dict = {
+                    "valid": val_res.valid,
+                    "status": val_res.status,
+                    "checks_passed": val_res.checks_passed,
+                    "checks_failed": val_res.checks_failed,
+                    "warnings": val_res.warnings,
+                }
+
+                if not val_res.valid or val_res.status != "VALID":
+                    st_validation.status = StageStatus.FAILED
+                    st_validation.error = f"Validation gate rejected result: {', '.join(val_res.checks_failed)}"
+                    st_validation.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                    st_validation.completed_at = utc_now_iso()
+                    st_validation.details = validation_result_dict
+                    stages_telemetry.append(st_validation)
+                    overall_status = WorkflowStatus.VALIDATION_FAILED
+                    raise ValidationGateError(
+                        message=f"Fail-closed validation gate rejected deliverable generation: {val_res.checks_failed}",
+                        validation_errors=val_res.checks_failed,
+                        details=validation_result_dict,
+                    )
+
+                st_validation.status = StageStatus.SUCCESS
                 st_validation.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
                 st_validation.completed_at = utc_now_iso()
                 st_validation.details = validation_result_dict
                 stages_telemetry.append(st_validation)
-                overall_status = WorkflowStatus.VALIDATION_FAILED
-                raise ValidationGateError(
-                    message=f"Fail-closed validation gate rejected deliverable generation: {val_res.checks_failed}",
-                    validation_errors=val_res.checks_failed,
-                    details=validation_result_dict,
+
+                # ── 9. Deterministic Office Deliverables ──────────────────────────
+                t_stage_start = time.monotonic()
+                st_deliverables = WorkflowStageTelemetry(
+                    stage_name="deliverables_factory",
+                    stage_index=8,
+                    status=StageStatus.IN_PROGRESS,
+                    started_at=utc_now_iso(),
                 )
 
-            st_validation.status = StageStatus.SUCCESS
-            st_validation.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
-            st_validation.completed_at = utc_now_iso()
-            st_validation.details = validation_result_dict
-            stages_telemetry.append(st_validation)
+                meta = ReportMetadata(
+                    title=f"Refining Equipment Corrosion Audit — {comp_id}",
+                    organization="MANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)",
+                    facility="Mangalore Refinery Complex",
+                    division="Inspection & Asset Integrity Division",
+                    prepared_by="SIH26117 Sovereign Agentic Intelligence Workbench",
+                    approved_by="Chief Inspection Engineer, MRPL",
+                )
 
-            # ── 9. Deterministic Office Deliverables ──────────────────────────
-            t_stage_start = time.monotonic()
-            st_deliverables = WorkflowStageTelemetry(
-                stage_name="deliverables_factory",
-                stage_index=8,
-                status=StageStatus.IN_PROGRESS,
-                started_at=utc_now_iso(),
-            )
+                deliv_res = self.deliverables_factory.generate(
+                    payload=val_res.validated_data or audit_payload,
+                    formats=request.requested_formats,
+                    metadata=meta,
+                    task_id=task_id,
+                )
 
-            meta = ReportMetadata(
-                title=f"Refining Equipment Corrosion Audit — {request.component_id}",
-                organization="MANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)",
-                facility="Mangalore Refinery Complex",
-                division="Inspection & Asset Integrity Division",
-                prepared_by="SIH26117 Sovereign Agentic Intelligence Workbench",
-                approved_by="Chief Inspection Engineer, MRPL",
-            )
-
-            deliv_res = self.deliverables_factory.generate(
-                payload=val_res.validated_data or audit_payload,
-                formats=request.requested_formats,
-                metadata=meta,
-                task_id=task_id,
-            )
-
-            for art in deliv_res.artifacts:
-                deliverable_summaries.append(
-                    ArtifactSummary(
-                        artifact_id=art.artifact_id,
-                        format=art.format.value,
-                        filename=art.filename,
-                        relative_path=art.relative_path,
-                        file_size_bytes=art.file_size_bytes,
-                        sha256=art.sha256_hash,
-                        download_url=f"/api/v1/deliverables/download/{art.format.value}/{art.filename}",
+                for art in deliv_res.artifacts:
+                    deliverable_summaries.append(
+                        ArtifactSummary(
+                            artifact_id=art.artifact_id,
+                            format=art.format.value,
+                            filename=art.filename,
+                            relative_path=art.relative_path,
+                            file_size_bytes=art.file_size_bytes,
+                            sha256=art.sha256_hash,
+                            download_url=f"/api/v1/deliverables/download/{art.format.value}/{art.filename}",
+                        )
                     )
-                )
 
-            st_deliverables.status = StageStatus.SUCCESS
-            st_deliverables.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
-            st_deliverables.completed_at = utc_now_iso()
-            st_deliverables.details = {
-                "artifacts_count": len(deliverable_summaries),
-                "formats": [a.format for a in deliverable_summaries],
-            }
-            stages_telemetry.append(st_deliverables)
+                st_deliverables.status = StageStatus.SUCCESS
+                st_deliverables.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                st_deliverables.completed_at = utc_now_iso()
+                st_deliverables.details = {
+                    "artifacts_count": len(deliverable_summaries),
+                    "formats": [a.format for a in deliverable_summaries],
+                }
+                stages_telemetry.append(st_deliverables)
 
             # ── 10. Audit Chain Verification ─────────────────────────────────
             t_stage_start = time.monotonic()
@@ -686,12 +951,23 @@ class CorrosionAuditWorkflow:
             )
 
             # Record final completed event
+            completed_action = (
+                f"Completed Vision Analysis Workflow [{workflow_id[:8]}]"
+                if is_vision_task
+                else f"Completed Corrosion Audit Workflow [{workflow_id[:8]}]"
+            )
             self._safe_audit(
                 AuditEventType.TASK_COMPLETED,
-                action=f"Completed Corrosion Audit Workflow [{workflow_id[:8]}]",
+                action=completed_action,
                 task_id=task_id,
+                model_role=role_key,
+                capability=execution_capability,
                 status="SUCCESS",
-                metadata={"artifacts_produced": len(deliverable_summaries)},
+                metadata={
+                    "artifacts_produced": len(deliverable_summaries),
+                    "capability": execution_capability,
+                    "active_model": active_model,
+                },
             )
 
             audit_verify = self.audit_service.verify_ledger()
@@ -763,12 +1039,18 @@ class CorrosionAuditWorkflow:
                 status="FAILED",
             )
         except Exception as exc:
-            logger.error("Workflow execution failed: %s", str(exc), exc_info=True)
-            overall_status = WorkflowStatus.FAILED
-            errors.append(str(exc))
+            err_msg = str(exc)
+            logger.error("Workflow execution failed: %s", err_msg, exc_info=True)
+            if "EVIDENCE_CONFLICT" in err_msg:
+                overall_status = WorkflowStatus.EVIDENCE_CONFLICT
+            elif "INSUFFICIENT_EVIDENCE" in err_msg:
+                overall_status = WorkflowStatus.INSUFFICIENT_EVIDENCE
+            else:
+                overall_status = WorkflowStatus.FAILED
+            errors.append(err_msg)
             self._safe_audit(
                 AuditEventType.TASK_FAILED,
-                action=f"Workflow failed: {str(exc)}",
+                action=f"Workflow failed: {err_msg}",
                 task_id=task_id,
                 status="FAILED",
             )
@@ -788,6 +1070,7 @@ class CorrosionAuditWorkflow:
             completed_at=utc_now_iso(),
             duration_seconds=duration_total,
             document_summary=doc_summary,
+            evidence_summary=evidence_dict,
             ocr_vision_summary=ocr_summary,
             routing_decision=routing_decision_dict,
             model_allocation=model_allocation_dict,
@@ -798,6 +1081,8 @@ class CorrosionAuditWorkflow:
             deliverables=deliverable_summaries,
             audit_summary=audit_summary if "audit_summary" in locals() else {},
             sovereignty_proof=sovereignty_summary if "sovereignty_summary" in locals() else {},
+            execution_capability=execution_capability,
+            active_model=active_model,
             stages=stages_telemetry,
             errors=errors,
         )

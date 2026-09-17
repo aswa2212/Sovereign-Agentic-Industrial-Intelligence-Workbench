@@ -70,6 +70,7 @@ async def test_e2e_c101_northstar_workflow_success(workflow_instance):
     request = CorrosionAuditWorkflowRequest(
         objective="Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note.",
         component_id="C-101",
+        is_demo_preset=True,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx"],
     )
@@ -179,6 +180,7 @@ async def test_e2e_c101_with_pptx_format(workflow_instance):
     request = CorrosionAuditWorkflowRequest(
         objective="Audit C-101 overhead corrosion and compile briefing deck.",
         component_id="C-101",
+        is_demo_preset=True,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx", "pptx"],
     )
@@ -238,6 +240,7 @@ async def test_e2e_vision_degraded_fallback(workflow_instance):
     wf = CorrosionAuditWorkflow(ocr_engine=UnavailableOCREngine(provider=MockOCRProvider()))
     request = CorrosionAuditWorkflowRequest(
         component_id="C-101",
+        is_demo_preset=True,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx"],
     )
@@ -271,6 +274,7 @@ async def test_e2e_validation_gate_fails_closed(workflow_instance):
     wf = CorrosionAuditWorkflow(validation_service=FailingValidationService())
     request = CorrosionAuditWorkflowRequest(
         component_id="C-101",
+        is_demo_preset=True,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx"],
     )
@@ -307,6 +311,7 @@ def test_api_post_corrosion_audit_workflow(api_client):
             "mode": "deterministic",
             "component_id": "C-101",
             "formats": "docx,xlsx",
+            "is_demo": "true",
         },
     )
     assert resp.status_code == 200
@@ -323,7 +328,7 @@ def test_api_get_workflow_result(api_client):
     # First execute a workflow
     post_resp = api_client.post(
         "/api/v1/workflows/corrosion-audit",
-        data={"mode": "deterministic", "formats": "docx"},
+        data={"mode": "deterministic", "formats": "docx", "is_demo": "true"},
     )
     assert post_resp.status_code == 200
     workflow_id = post_resp.json()["workflow_id"]
@@ -343,13 +348,133 @@ def test_api_get_workflow_result(api_client):
 def test_api_post_json_workflow(api_client):
     """Test 11: POST /api/v1/workflows/corrosion-audit/json executes via JSON payload."""
     payload = {
-        "objective": "Audit C-101 via JSON trigger",
+        "objective": "Audit thickness readings against MRPL piping specification for C-101 via JSON trigger",
         "component_id": "C-101",
         "execution_mode": "deterministic",
         "requested_formats": ["docx"],
+        "is_demo_preset": True,
     }
     resp = api_client.post("/api/v1/workflows/corrosion-audit/json", json=payload)
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "COMPLETED"
     assert len(data["deliverables"]) == 1
+
+
+def test_api_post_corrosion_audit_workflow_with_uploaded_image(api_client):
+    """Test 12: POST /api/v1/workflows/corrosion-audit executes successfully with uploaded image (pid_sample.png)."""
+    settings = get_settings()
+    img_path = settings.project_root / "data" / "samples" / "pid_sample.png"
+    assert img_path.is_file(), f"Sample image not found at {img_path}"
+    img_bytes = img_path.read_bytes()
+
+    resp = api_client.post(
+        "/api/v1/workflows/corrosion-audit",
+        files={"file": ("pid_sample.png", img_bytes, "image/png")},
+        data={
+            "objective": "Inspect C-101 atmospheric column overheads thickness survey, calculate corrosion rate, and generate executive report.",
+            "mode": "deterministic",
+            "component_id": "C-101",
+            "formats": "docx,xlsx",
+            "is_demo": "true",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "COMPLETED"
+    assert data["workflow_id"] is not None
+    assert data["document_summary"]["filename"] == "pid_sample.png"
+    assert len(data["deliverables"]) == 2
+    assert len(data["stages"]) == 11
+    assert data["validation_result"]["valid"] is True
+    assert data["active_model"] == data["model_allocation"]["assigned_model_tag"]
+
+
+def test_api_post_vision_only_workflow(api_client):
+    """Test 13: POST /api/v1/workflows/corrosion-audit with vision-only objective routes to vision and yields 0 deliverables."""
+    settings = get_settings()
+    img_path = settings.project_root / "data" / "samples" / "pid_sample.png"
+    assert img_path.is_file(), f"Sample image not found at {img_path}"
+    img_bytes = img_path.read_bytes()
+
+    vision_prompt = (
+        "Analyze the uploaded P&ID image for C-101. Identify all visible equipment tags, piping lines, "
+        "valves, instruments, nozzles, and major process connections. Extract the labels and describe "
+        "their spatial relationships. Do not perform corrosion calculations, numerical engineering analysis, "
+        "or remaining-life estimation. Return structured visual findings only."
+    )
+
+    resp = api_client.post(
+        "/api/v1/workflows/corrosion-audit",
+        files={"file": ("pid_sample.png", img_bytes, "image/png")},
+        data={
+            "objective": vision_prompt,
+            "mode": "deterministic",
+            "component_id": "C-101",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "COMPLETED"
+    assert data["routing_decision"]["model_role"] == "vision"
+    assert data["execution_capability"] == "vision"
+    assert data["active_model"] == data["model_allocation"]["vision_model_tag"]
+    # Section B & C: Explicitly empty deliverables collection
+    assert data["deliverables"] == []
+    # Do NOT run calculation or validation gate
+    assert data["calculation_result"] is None
+    assert data["validation_result"] is None
+
+    # Check skipped stages
+    stage_map = {s["stage_name"]: s["status"] for s in data["stages"]}
+    assert stage_map["document_ingestion"] == "SUCCESS"
+    assert stage_map["ocr_vision_analysis"] in ("SUCCESS", "DEGRADED")
+    assert stage_map["task_routing"] == "SUCCESS"
+    assert stage_map["model_allocation"] == "SUCCESS"
+    assert stage_map["sandboxed_calculation"] == "SKIPPED"
+    assert stage_map["engineering_validation_gate"] == "SKIPPED"
+    assert stage_map["deliverables_factory"] == "SKIPPED"
+    assert stage_map["audit_chain_verification"] == "SUCCESS"
+    assert stage_map["sovereignty_verification"] == "SUCCESS"
+
+
+@pytest.mark.anyio
+async def test_workflow_deliverables_isolation_across_runs(workflow_instance):
+    """Test 14: Consecutive runs isolate deliverables to current task_id and vision produces 0 deliverables."""
+    # Run 1: Corrosion calculation task
+    req_corrosion = CorrosionAuditWorkflowRequest(
+        objective="Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note.",
+        component_id="C-101",
+        is_demo_preset=True,
+        execution_mode=WorkflowExecutionMode.DETERMINISTIC,
+        requested_formats=["docx", "xlsx"],
+        task_id="task_corr_alpha",
+    )
+    res_corrosion = await workflow_instance.run(req_corrosion)
+    assert res_corrosion.status == WorkflowStatus.COMPLETED
+    assert len(res_corrosion.deliverables) == 2
+    assert all(d.artifact_id is not None for d in res_corrosion.deliverables)
+
+    # Run 2: Vision-only task
+    req_vision = CorrosionAuditWorkflowRequest(
+        objective=(
+            "Analyze the uploaded P&ID image for C-101. Identify all visible equipment tags, piping lines, "
+            "valves, instruments, nozzles, and major process connections. Extract the labels and describe "
+            "their spatial relationships. Do not perform corrosion calculations, numerical engineering analysis, "
+            "or remaining-life estimation. Return structured visual findings only."
+        ),
+        component_id="C-101",
+        document_filename="pid_sample.png",
+        execution_mode=WorkflowExecutionMode.DETERMINISTIC,
+        task_id="task_vision_beta",
+    )
+    res_vision = await workflow_instance.run(req_vision)
+    assert res_vision.status == WorkflowStatus.COMPLETED
+    assert res_vision.execution_capability == "vision"
+    assert res_vision.active_model == res_vision.model_allocation["vision_model_tag"]
+    # Must NOT leak deliverables from Task 1
+    assert res_vision.deliverables == []
+    assert res_vision.calculation_result is None
+    assert res_vision.validation_result is None
+
+

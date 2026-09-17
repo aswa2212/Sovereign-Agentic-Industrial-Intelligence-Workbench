@@ -187,14 +187,16 @@ SIH 2026/
 - Node.js 22+
 - [Ollama](https://ollama.ai/) installed locally
 
-### Backend Setup (Development)
+### Backend Setup (Execution & Demonstration)
 ```bash
 cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-uvicorn app.main:app --reload --port 8000
+
+# For live/demonstration execution on Windows (runs without --reload to preserve WindowsProactorEventLoopPolicy for the subprocess sandbox):
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### Verification

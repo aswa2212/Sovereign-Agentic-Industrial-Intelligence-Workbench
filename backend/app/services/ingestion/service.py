@@ -256,6 +256,15 @@ class IngestionService:
             "extraction_method": extraction_method,
         }
 
+        # 9a. Extract structured engineering evidence
+        evidence_dict = None
+        try:
+            from app.services.ingestion.evidence import EngineeringEvidenceExtractor
+            ev = EngineeringEvidenceExtractor().extract(normalized_doc)
+            evidence_dict = ev.model_dump()
+        except Exception:
+            evidence_dict = None
+
         return DocumentIngestionResult(
             document_id=document_id,
             filename=safe_name,
@@ -275,8 +284,45 @@ class IngestionService:
             warnings=warnings,
             errors=errors,
             normalized_document=normalized_doc,
+            evidence=evidence_dict,
         )
 
     def get_document_by_sha256(self, sha256: str) -> Optional[Dict[str, Any]]:
         """Retrieve stored normalized document representation by its SHA-256 digest."""
         return self.storage.get_processed_document(sha256)
+
+    def get_raw_file_path(self, sha256: str, filename: str = "") -> Optional[Path]:
+        """Retrieve local raw file path by SHA-256."""
+        return self.storage.get_raw_file_path(sha256, filename)
+
+    def list_documents(self) -> List[DocumentIngestionResult]:
+        """List all successfully ingested documents stored on disk."""
+        docs = self.storage.list_processed_documents()
+        results = []
+        for d in docs:
+            try:
+                pages = d.get("pages", [])
+                tables = d.get("tables", [])
+                res = DocumentIngestionResult(
+                    document_id=d.get("document_id", d.get("sha256", "")[:12]),
+                    filename=d.get("original_filename", d.get("sanitized_filename", "unnamed_document")),
+                    sha256=d.get("sha256", ""),
+                    media_type=d.get("media_type", "application/pdf"),
+                    size_bytes=d.get("size_bytes", 0),
+                    status=d.get("status", "success"),
+                    is_scanned=d.get("is_scanned", False),
+                    needs_ocr=d.get("needs_ocr", False),
+                    is_drawing=d.get("is_drawing", False),
+                    page_count=len(pages),
+                    table_count=len(tables),
+                    is_duplicate=False,
+                    raw_path=d.get("raw_path", ""),
+                    processed_path=d.get("processed_path"),
+                    extraction_summary=d.get("metadata", {}),
+                    warnings=d.get("warnings", []),
+                    errors=d.get("errors", []),
+                )
+                results.append(res)
+            except Exception:
+                continue
+        return results

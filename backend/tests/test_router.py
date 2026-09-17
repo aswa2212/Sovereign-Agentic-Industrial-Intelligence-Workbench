@@ -263,6 +263,28 @@ class TestRuleRouter:
         assert decision.model_role == ModelRole.VISION
         assert decision.confidence >= 0.70
 
+    def test_user_pid_vision_objective(self, router):
+        objective = (
+            "Analyze the uploaded P&ID image for C-101. Identify all visible equipment tags, "
+            "piping lines, valves, instruments, nozzles, and major process connections. "
+            "Extract the labels and describe their spatial relationships. "
+            "Do not perform corrosion calculations, numerical engineering analysis, "
+            "or remaining-life estimation. Return structured visual findings only."
+        )
+        decision = router.route(objective)
+        assert decision.task_type == TaskType.VISION
+        assert decision.model_role == ModelRole.VISION
+        assert decision.confidence >= 0.70
+
+    def test_c101_corrosion_assessment_routes_to_reasoning(self, router):
+        objective = (
+            "Perform an end-to-end corrosion and remaining-life assessment for column C-101 "
+            "based on inspection records."
+        )
+        decision = router.route(objective)
+        assert decision.model_role == ModelRole.REASONING
+        assert decision.task_type in (TaskType.CALCULATION, TaskType.DOCUMENT_ANALYSIS, TaskType.REASONING)
+
     def test_document_analysis_task_routes_to_reasoning(self, router):
         decision = router.route(
             "Analyze this corrosion inspection report for pipe P-104."

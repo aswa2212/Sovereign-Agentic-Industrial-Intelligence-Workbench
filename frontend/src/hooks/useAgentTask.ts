@@ -3,6 +3,7 @@ import { agentService } from '../services/agent';
 import { AgentRunResponse, AgentState, StateTransition, CitationSource } from '../types/agent';
 import { RouteResponse } from '../types/api';
 import { GeneratedArtifact } from '../types/deliverables';
+import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
 
 export interface TaskExecutionState {
   isRunning: boolean;
@@ -19,6 +20,8 @@ export interface TaskExecutionState {
 }
 
 export function useAgentTask() {
+  const { setRuntimeExecution, setPredictedRoute, resetRuntimeState } = useWorkbenchRuntime();
+
   const [state, setState] = useState<TaskExecutionState>({
     isRunning: false,
     taskId: null,
@@ -38,25 +41,33 @@ export function useAgentTask() {
     try {
       const decision = await agentService.routeTask(taskText);
       setState((prev) => ({ ...prev, routePreview: decision }));
+      setPredictedRoute(decision, null);
       return decision;
     } catch {
       return null;
     }
-  }, []);
+  }, [setPredictedRoute]);
 
   const executeTask = useCallback(async (
     taskText: string,
     maxSteps = 8,
     mode: 'deterministic' | 'live' = 'deterministic',
     componentId = 'C-101',
+    file?: File | null,
   ) => {
-    setState((prev) => ({
-      ...prev,
+    // Rule 8: Clear ALL previous execution state before sending the request
+    resetRuntimeState();
+    setState({
       isRunning: true,
+      taskId: null,
       currentState: 'RECEIVE',
+      routePreview: state.routePreview,
       executionMode: mode,
       errorMessage: null,
       errors: [],
+      deliverables: [],
+      result: null,
+      citations: [],
       trace: [
         {
           from_state: 'IDLE',
@@ -65,23 +76,25 @@ export function useAgentTask() {
           message: `Initiated task in ${mode.toUpperCase()} mode: ${taskText.slice(0, 60)}...`,
         },
       ],
-    }));
+    });
 
     try {
       // Execute the 11-stage integration workflow for both deterministic & live modes
-      const wfRes = await agentService.runWorkflow(taskText, mode, componentId);
+      const wfRes = await agentService.runWorkflow(taskText, mode, componentId, file);
 
       const transitions: StateTransition[] = (wfRes.stages || []).map((st: any, idx: number) => ({
         from_state: (idx === 0 ? 'IDLE' : 'EXECUTE') as AgentState,
-        to_state: (st.status === 'SUCCESS' ? (idx === (wfRes.stages.length - 1) ? 'DELIVER' : 'EXECUTE') : 'FAILED') as AgentState,
+        to_state: (st.status === 'SUCCESS' ? (idx === (wfRes.stages.length - 1) ? 'DELIVER' : 'EXECUTE') : (st.status === 'SKIPPED' ? 'EXECUTE' : 'FAILED')) as AgentState,
         timestamp: st.completed_at || new Date().toISOString(),
         message: `[${st.stage_name}]: ${st.status} (${st.duration_ms?.toFixed(1) || 0}ms)`,
         metadata: st.details,
       }));
 
+      const currentTaskId = wfRes.task_id || wfRes.workflow_id;
+
       const mappedDeliverables: GeneratedArtifact[] = (wfRes.deliverables || []).map((d: any) => ({
         artifact_id: d.artifact_id,
-        task_id: wfRes.task_id || wfRes.workflow_id,
+        task_id: currentTaskId,
         format: d.format,
         filename: d.filename,
         file_size_bytes: d.file_size_bytes,
@@ -99,12 +112,23 @@ export function useAgentTask() {
         similarity_score: c.similarity_score,
       }));
 
-      setState((prev) => ({
-        ...prev,
+      // Synchronize runtime context strictly from the backend response facts
+      setRuntimeExecution({
+        active_model: wfRes.active_model,
+        routing_decision: wfRes.routing_decision,
+        model_allocation: wfRes.model_allocation,
+        execution_capability: wfRes.execution_capability,
+        task_id: currentTaskId,
+        document_summary: wfRes.document_summary,
+      });
+
+      // Entirely replace state with the new response (do NOT merge with previous run)
+      setState({
         isRunning: false,
-        taskId: wfRes.task_id || wfRes.workflow_id,
+        taskId: currentTaskId,
         currentState: wfRes.status === 'COMPLETED' ? 'DELIVER' : 'FAILED',
-        trace: transitions.length > 0 ? transitions : prev.trace,
+        routePreview: wfRes.routing_decision || state.routePreview,
+        trace: transitions.length > 0 ? transitions : [],
         deliverables: mappedDeliverables,
         result: {
           task: taskText,
@@ -116,24 +140,32 @@ export function useAgentTask() {
           structured_validation: wfRes.validation_result,
         },
         citations: mappedCitations,
+        executionMode: mode,
         errors: wfRes.errors || [],
         errorMessage: wfRes.status !== 'COMPLETED' ? (wfRes.errors?.[0] || 'Workflow execution failed') : null,
-      }));
+      });
 
       return wfRes;
     } catch (err: any) {
-      setState((prev) => ({
-        ...prev,
+      setState({
         isRunning: false,
+        taskId: null,
         currentState: 'FAILED',
+        routePreview: state.routePreview,
+        trace: state.trace,
+        deliverables: [],
+        result: null,
+        citations: [],
+        executionMode: mode,
         errorMessage: err.message || 'Unexpected failure executing agent task',
         errors: [err.message || 'Workflow execution error'],
-      }));
+      });
       return null;
     }
-  }, []);
+  }, [resetRuntimeState, setRuntimeExecution, state.routePreview, state.trace]);
 
   const reset = useCallback(() => {
+    resetRuntimeState();
     setState({
       isRunning: false,
       taskId: null,
@@ -147,7 +179,7 @@ export function useAgentTask() {
       errors: [],
       errorMessage: null,
     });
-  }, []);
+  }, [resetRuntimeState]);
 
   return {
     ...state,
@@ -156,3 +188,4 @@ export function useAgentTask() {
     reset,
   };
 }
+

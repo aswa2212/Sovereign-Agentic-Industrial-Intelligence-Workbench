@@ -176,3 +176,6 @@ class DocumentIngestionResult(BaseModel):
     normalized_document: Optional[NormalizedDocument] = Field(
         default=None, description="Full normalized representation if requested"
     )
+    evidence: Optional[Dict[str, Any]] = Field(
+        default=None, description="Structured engineering evidence extracted from document"
+    )

@@ -216,6 +216,7 @@ async def test_live_mode_fails_closed_when_vision_fails():
             objective="Inspect C-101 schematic",
             execution_mode=WorkflowExecutionMode.LIVE,
             component_id="C-101",
+            is_demo_preset=True,
         )
         result = await workflow.run(req)
         assert result.status == WorkflowStatus.FAILED

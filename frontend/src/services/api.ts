@@ -41,10 +41,22 @@ export class ApiError extends Error {
 }
 
 /**
- * Resolves fallback mock data when backend is not running.
+ * Resolves fallback mock data for read-only system telemetry when backend is not running.
+ * CRITICAL RULE: Operational endpoints (/workflows/*, /agent/*, /files/*, /deliverables)
+ * MUST NEVER silently return mock calculation data. They must fail explicitly with ApiError.
  */
 function getMockFallback<T>(endpoint: string, options: RequestInit = {}): T | null {
   const cleanEndpoint = endpoint.replace(/^\/api\/v1/, '').split('?')[0];
+
+  // OPERATIONAL ENDPOINTS: strictly fail closed, NO silent fallback!
+  if (
+    cleanEndpoint.startsWith('/workflows') ||
+    cleanEndpoint.startsWith('/agent') ||
+    cleanEndpoint.startsWith('/files') ||
+    cleanEndpoint.startsWith('/deliverables')
+  ) {
+    return null;
+  }
 
   if (cleanEndpoint === '/health' || cleanEndpoint.endsWith('/health')) {
     if (cleanEndpoint.includes('/models/')) return MOCK_MODEL_HEALTH as unknown as T;
@@ -73,46 +85,6 @@ function getMockFallback<T>(endpoint: string, options: RequestInit = {}): T | nu
 
   if (cleanEndpoint === '/router/route') {
     return MOCK_ROUTING_DECISION as unknown as T;
-  }
-
-  if (cleanEndpoint === '/agent/run' || cleanEndpoint === '/agent/task') {
-    return MOCK_TASK_RUN_RESPONSE as unknown as T;
-  }
-
-  if (cleanEndpoint.startsWith('/agent/')) {
-    return {
-      task_id: 'task-c101-audit-2026',
-      current_state: 'COMPLETED',
-      step_count: 8,
-      started_at: new Date(Date.now() - 30000).toISOString(),
-      updated_at: new Date().toISOString(),
-      execution_trace: MOCK_TASK_RUN_RESPONSE.execution_trace,
-      errors: [],
-    } as unknown as T;
-  }
-
-  if (cleanEndpoint === '/workflows/corrosion-audit') {
-    return {
-      task_id: 'task-c101-audit-2026',
-      status: 'completed',
-      corrosion_result: MOCK_CORROSION_AUDIT_RESULT,
-      validation_report: MOCK_VALIDATION_REPORT,
-      deliverables: MOCK_DELIVERABLES,
-      audit_events: MOCK_AUDIT_EVENTS,
-      sovereignty: MOCK_SOVEREIGNTY_STATUS,
-    } as unknown as T;
-  }
-
-  if (cleanEndpoint === '/deliverables') {
-    return MOCK_DELIVERABLES as unknown as T;
-  }
-
-  if (cleanEndpoint === '/files' || cleanEndpoint === '/files/list') {
-    return MOCK_INGESTED_DOCUMENTS as unknown as T;
-  }
-
-  if (cleanEndpoint === '/files/upload') {
-    return MOCK_INGESTED_DOCUMENTS[0] as unknown as T;
   }
 
   if (cleanEndpoint === '/audit/events') {

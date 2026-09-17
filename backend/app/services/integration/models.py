@@ -25,6 +25,8 @@ class WorkflowStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     VALIDATION_FAILED = "VALIDATION_FAILED"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    EVIDENCE_CONFLICT = "EVIDENCE_CONFLICT"
     FAILED = "FAILED"
 
 
@@ -53,7 +55,7 @@ class WorkflowStageTelemetry(BaseModel):
 
 
 class CorrosionAuditWorkflowRequest(BaseModel):
-    """Request specification for triggering the C-101 corrosion audit workflow."""
+    """Request specification for triggering the corrosion audit workflow."""
     model_config = ConfigDict(extra="forbid")
 
     objective: str = Field(
@@ -61,12 +63,16 @@ class CorrosionAuditWorkflowRequest(BaseModel):
         description="Operator task objective / user prompt",
     )
     document_filename: Optional[str] = Field(
-        default="corrosion_inspection_c101.pdf",
+        default=None,
         description="Source document name in samples or storage",
     )
     execution_mode: WorkflowExecutionMode = Field(
         default=WorkflowExecutionMode.DETERMINISTIC,
         description="Deterministic (reproducible test mode) or live local models",
+    )
+    is_demo_preset: bool = Field(
+        default=False,
+        description="Explicit flag indicating C-101 demonstration preset execution",
     )
     requested_formats: List[str] = Field(
         default=["docx", "xlsx"],
@@ -81,12 +87,12 @@ class CorrosionAuditWorkflowRequest(BaseModel):
         description="Equipment or circuit tag identifier",
     )
     elapsed_time_years: Optional[float] = Field(
-        default=5.0,
+        default=None,
         description="Operating years elapsed since baseline inspection",
         gt=0.0,
     )
     minimum_required_thickness_mm: Optional[float] = Field(
-        default=8.0,
+        default=None,
         description="Allowable retirement limit from standard/SOP (mm)",
         gt=0.0,
     )
@@ -121,6 +127,7 @@ class CorrosionAuditWorkflowResult(BaseModel):
     # Subsystem evidence blocks
     document_summary: Dict[str, Any] = Field(default_factory=dict)
     ocr_vision_summary: Dict[str, Any] = Field(default_factory=dict)
+    evidence_summary: Optional[Dict[str, Any]] = None
     routing_decision: Optional[Dict[str, Any]] = None
     model_allocation: Optional[Dict[str, Any]] = None
     agent_summary: Optional[Dict[str, Any]] = None
@@ -130,6 +137,10 @@ class CorrosionAuditWorkflowResult(BaseModel):
     deliverables: List[ArtifactSummary] = Field(default_factory=list)
     audit_summary: Dict[str, Any] = Field(default_factory=dict)
     sovereignty_proof: Dict[str, Any] = Field(default_factory=dict)
+
+    # Capability and active model metadata
+    execution_capability: Optional[str] = None
+    active_model: Optional[str] = None
 
     # Detailed stage trace
     stages: List[WorkflowStageTelemetry] = Field(default_factory=list)

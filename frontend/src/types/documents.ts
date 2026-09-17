@@ -2,16 +2,21 @@
  * Document Ingestion and Metadata types.
  */
 
+export type ExtractionSummary = string | Record<string, unknown>;
+
 export interface DocumentIngestionResult {
   sha256: string;
   filename: string;
-  content_type: string;
+  content_type?: string;
+  media_type?: string;
   size_bytes: number;
   page_count: number;
   table_count: number;
-  storage_path: string;
-  extraction_summary: string;
+  storage_path?: string;
+  raw_path?: string;
+  extraction_summary: ExtractionSummary;
   created_at?: string;
+  status?: string;
 }
 
 export interface ExtractedTable {

@@ -7,6 +7,7 @@ export type DeliverableFormat = 'docx' | 'xlsx' | 'pptx';
 
 export interface GeneratedArtifact {
   artifact_id: string;
+  task_id?: string;
   format: DeliverableFormat;
   filename: string;
   file_size_bytes: number;
@@ -16,6 +17,7 @@ export interface GeneratedArtifact {
   sha256_checksum?: string;
   created_at: string;
   download_url?: string;
+  validation_status?: string;
 }
 
 export interface DeliverableGenerateResponse {

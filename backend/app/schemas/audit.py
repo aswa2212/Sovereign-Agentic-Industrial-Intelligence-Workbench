@@ -2,13 +2,22 @@
 
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
-from app.services.audit.models import (
-    AuditEvent,
-    AuditEventType,
-    AuditVerificationResult,
-    NetworkObservationReport,
-    SovereigntyStatus,
-)
+try:
+    from app.services.audit.models import (
+        AuditEvent,
+        AuditEventType,
+        AuditVerificationResult,
+        NetworkObservationReport,
+        SovereigntyStatus,
+    )
+except ImportError:
+    from backend.app.services.audit.models import (
+        AuditEvent,
+        AuditEventType,
+        AuditVerificationResult,
+        NetworkObservationReport,
+        SovereigntyStatus,
+    )
 
 
 class AuditEventResponse(BaseModel):

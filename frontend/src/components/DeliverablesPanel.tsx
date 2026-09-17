@@ -17,6 +17,10 @@ import { DataSourceBadge } from './DataSourceBadge';
 interface DeliverablesPanelProps {
   artifacts: GeneratedArtifact[];
   taskId?: string | null;
+  executionCapability?: string | null;
+  activeModel?: string | null;
+  sourceDocument?: string | null;
+  visualFindingsCount?: number;
   equipmentId?: string;
   summary?: string;
   onGenerated?: (artifacts: GeneratedArtifact[]) => void;
@@ -27,6 +31,10 @@ interface DeliverablesPanelProps {
 export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
   artifacts,
   taskId,
+  executionCapability,
+  activeModel,
+  sourceDocument,
+  visualFindingsCount,
   equipmentId = 'C-101',
   summary = 'Corrosion and integrity analysis findings.',
   onGenerated,
@@ -38,9 +46,19 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
   const toast = useToast();
 
   const isLive = executionMode === 'live';
-  const hasArtifacts = artifacts.length > 0;
+  const isVisionOnly = executionCapability === 'vision';
+
+  // Section 9 & 10: Strict task isolation — filter strictly by current taskId
+  const currentArtifacts = taskId
+    ? artifacts.filter((a) => a.task_id === taskId)
+    : [];
+  const hasArtifacts = currentArtifacts.length > 0;
 
   const handleGenerate = async (formats: DeliverableFormat[] = ['docx', 'xlsx']) => {
+    if (isVisionOnly) {
+      toast.info('Vision Task', 'Engineering report compilation is not applicable for visual inspection tasks.');
+      return;
+    }
     if (!validationPassed) {
       toast.error('Validation Gate Failed', 'Fail-Closed policy withholds deliverable compilation until all 12 checks pass.');
       return;
@@ -110,34 +128,80 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
         </div>
 
         <div className="panel-header-badges">
-          <DataSourceBadge
-            source={hasArtifacts ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
-            label={hasArtifacts ? (isLive ? 'GENERATED LIVE' : 'DEMO ARTIFACT') : 'AWAITING RELEASE'}
-          />
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => handleGenerate(['docx', 'xlsx'])}
-            disabled={isGenerating}
-            title="Compile publication-ready DOCX and XLSX deliverables"
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw size={13} className="icon-spin" />
-                <span>Compiling...</span>
-              </>
-            ) : (
-              <>
-                <RefreshCw size={13} />
-                <span>Compile</span>
-              </>
-            )}
-          </button>
+          {isVisionOnly ? (
+            <DataSourceBadge
+              source="LIVE"
+              label="VISUAL ANALYSIS"
+              size="sm"
+            />
+          ) : (
+            <>
+              <DataSourceBadge
+                source={hasArtifacts ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
+                label={hasArtifacts ? (isLive ? 'GENERATED LIVE' : 'DEMO ARTIFACT') : 'AWAITING RELEASE'}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleGenerate(['docx', 'xlsx'])}
+                disabled={isGenerating}
+                title="Compile publication-ready DOCX and XLSX deliverables"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw size={13} className="icon-spin" />
+                    <span>Compiling...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={13} />
+                    <span>Compile</span>
+                  </>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="panel-body-scroll">
-        {artifacts.length === 0 ? (
+        {isVisionOnly && currentArtifacts.length === 0 ? (
+          <div className="empty-panel-state vision-empty-deliverables">
+            <CheckCircle2 size={28} className="empty-icon" style={{ color: 'var(--accent-color, #38bdf8)', opacity: 0.9 }} />
+            <div className="empty-title">NO ENGINEERING DELIVERABLES</div>
+            <div className="empty-desc">
+              Visual analysis completed. Engineering calculation and document generation were not part of this execution.
+            </div>
+            <div className="vision-deliverables-meta-box">
+              <div className="meta-row">
+                <span className="meta-label">TASK TYPE:</span>
+                <span className="meta-val">VISION</span>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">ACTIVE MODEL:</span>
+                <code className="meta-code">{activeModel || 'MODEL UNAVAILABLE'}</code>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">SOURCE:</span>
+                <span className="meta-val">{sourceDocument || 'pid_sample.png'}</span>
+              </div>
+              {visualFindingsCount !== undefined && visualFindingsCount > 0 && (
+                <div className="meta-row">
+                  <span className="meta-label">FINDINGS:</span>
+                  <span className="meta-val">{visualFindingsCount} elements detected</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : !taskId ? (
+          <div className="empty-panel-state">
+            <Lock size={26} className="empty-icon" />
+            <div className="empty-title">No Active Task</div>
+            <div className="empty-desc">
+              Execute an engineering audit task to compile and verify signed deliverables.
+            </div>
+          </div>
+        ) : currentArtifacts.length === 0 ? (
           <div className="empty-panel-state">
             <Lock size={26} className="empty-icon" />
             <div className="empty-title">No Deliverables Released Yet</div>
@@ -147,7 +211,7 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
           </div>
         ) : (
           <div className="deliverables-cards-list">
-            {artifacts.map((art) => {
+            {currentArtifacts.map((art) => {
               const isDocx = art.format === 'docx';
               const sizeKb = (art.file_size_bytes / 1024).toFixed(1);
               const hash = art.sha256_hash || art.sha256_checksum || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';

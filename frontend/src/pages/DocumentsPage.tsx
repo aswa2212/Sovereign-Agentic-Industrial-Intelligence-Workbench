@@ -75,11 +75,16 @@ export const DocumentsPage: React.FC = () => {
     }
   };
 
-  const filteredDocs = documents.filter((d) =>
-    d.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.sha256.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (d.extraction_summary && d.extraction_summary.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredDocs = documents.filter((d) => {
+    const summaryStr = typeof d.extraction_summary === 'string'
+      ? d.extraction_summary
+      : JSON.stringify(d.extraction_summary || '');
+    return (
+      d.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.sha256.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      summaryStr.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   return (
     <div className="page-container documents-page">
@@ -265,7 +270,11 @@ export const DocumentsPage: React.FC = () => {
 
               <div className="inspector-summary-box">
                 <span className="summary-heading">EXTRACTION SUMMARY:</span>
-                <p>{selectedDoc.extraction_summary}</p>
+                <p>
+                  {typeof selectedDoc.extraction_summary === 'string'
+                    ? selectedDoc.extraction_summary
+                    : JSON.stringify(selectedDoc.extraction_summary, null, 2)}
+                </p>
               </div>
 
               <div className="inspector-airgap-notice">

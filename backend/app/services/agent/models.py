@@ -109,6 +109,7 @@ class AgentContext(BaseModel):
     retrieved_context: List[RetrievedChunk] = Field(default_factory=list, description="Knowledge retrieved from RAG")
     tool_results: Dict[str, Any] = Field(default_factory=dict, description="Mapped tool outputs by step_id")
     final_result: Optional[Dict[str, Any]] = Field(default=None, description="Final deliverable payload")
+    evidence: Optional[Dict[str, Any]] = Field(default=None, description="Structured engineering evidence provided to agent")
     errors: List[str] = Field(default_factory=list, description="Cumulative non-fatal or fatal error messages")
     step_count: int = Field(default=0, description="Total executed steps across life of task")
     retry_count: int = Field(default=0, description="Total retries invoked")

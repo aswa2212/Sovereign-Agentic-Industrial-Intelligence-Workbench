@@ -5,6 +5,7 @@ import { IconRailNav } from './components/IconRailNav';
 import { CommandPalette } from './components/CommandPalette';
 import { PhysicalAttestationModal } from './components/PhysicalAttestationModal';
 import { ToastProvider } from './components/ToastProvider';
+import { WorkbenchRuntimeProvider } from './context/WorkbenchRuntimeContext';
 
 // Lazy-loaded routes for code-splitting
 const OverviewPage = lazy(() => import('./pages/OverviewPage').then(m => ({ default: m.OverviewPage })));
@@ -90,7 +91,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AppContent />
+        <WorkbenchRuntimeProvider>
+          <AppContent />
+        </WorkbenchRuntimeProvider>
       </ToastProvider>
     </BrowserRouter>
   );
