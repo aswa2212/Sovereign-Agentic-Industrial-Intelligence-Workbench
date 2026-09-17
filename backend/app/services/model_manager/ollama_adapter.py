@@ -182,6 +182,7 @@ class OllamaAdapter(InferenceBackend):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> str:
         """
@@ -198,6 +199,8 @@ class OllamaAdapter(InferenceBackend):
         }
         if system_prompt:
             payload["system"] = system_prompt
+        if keep_alive is not None:
+            payload["keep_alive"] = keep_alive
         if "images" in kwargs and kwargs["images"]:
             payload["images"] = kwargs["images"]
 
@@ -211,6 +214,7 @@ class OllamaAdapter(InferenceBackend):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """
@@ -228,6 +232,8 @@ class OllamaAdapter(InferenceBackend):
         }
         if system_prompt:
             payload["system"] = system_prompt
+        if keep_alive is not None:
+            payload["keep_alive"] = keep_alive
         if "images" in kwargs and kwargs["images"]:
             payload["images"] = kwargs["images"]
 

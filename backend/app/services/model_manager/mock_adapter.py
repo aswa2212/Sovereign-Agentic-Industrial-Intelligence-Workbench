@@ -113,6 +113,11 @@ class MockInferenceBackend(InferenceBackend):
                             simulating a backend outage for failure-path tests.
         """
         self._always_healthy = always_healthy
+        self.loaded_models: set[str] = set()
+        self.unloaded_history: List[str] = []
+        self.generation_calls: List[Dict[str, Any]] = []
+        self.active_concurrency: int = 0
+        self.max_observed_concurrency: int = 0
 
     async def list_available_models(self) -> List[ModelInfo]:
         """Return the static mock model catalogue."""
@@ -122,7 +127,7 @@ class MockInferenceBackend(InferenceBackend):
                 ModelInfo(
                     **{
                         **m.model_dump(),
-                        "is_resident_in_vram": m.model_id in _LOADED_MODELS,
+                        "is_resident_in_vram": (m.model_id in _LOADED_MODELS or m.model_id in self.loaded_models),
                     }
                 )
             )
@@ -130,20 +135,23 @@ class MockInferenceBackend(InferenceBackend):
 
     async def load_model(self, model_id: str) -> bool:
         """
-        Simulate loading a model.  Only succeeds if the model is in the catalogue.
+        Simulate loading a model.  Only succeeds if the model is in the catalogue
+        or starts with 'mock'.
         """
         known_ids = {m.model_id for m in _MOCK_MODELS}
-        if model_id not in known_ids:
+        if model_id not in known_ids and not model_id.startswith("mock"):
             return False
         _LOADED_MODELS.add(model_id)
+        self.loaded_models.add(model_id)
         return True
 
     async def unload_model(self, model_id: str) -> bool:
         """Simulate unloading a model from VRAM."""
-        if model_id in _LOADED_MODELS:
-            _LOADED_MODELS.discard(model_id)
-            return True
-        return False
+        _LOADED_MODELS.discard(model_id)
+        was_loaded = model_id in self.loaded_models
+        self.loaded_models.discard(model_id)
+        self.unloaded_history.append(model_id)
+        return True
 
     async def generate(
         self,
@@ -151,11 +159,30 @@ class MockInferenceBackend(InferenceBackend):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> str:
         """Return a deterministic mock text response."""
-        template = _RESPONSE_TEMPLATES["default"]
-        return template.format(model_id=model_id)
+        self.active_concurrency += 1
+        self.max_observed_concurrency = max(self.max_observed_concurrency, self.active_concurrency)
+        self.generation_calls.append(
+            {
+                "model_id": model_id,
+                "prompt": prompt,
+                "system_prompt": system_prompt,
+                "temperature": temperature,
+                "keep_alive": keep_alive,
+                "structured": False,
+                **kwargs,
+            }
+        )
+        _LOADED_MODELS.add(model_id)
+        self.loaded_models.add(model_id)
+        try:
+            template = _RESPONSE_TEMPLATES["default"]
+            return template.format(model_id=model_id)
+        finally:
+            self.active_concurrency -= 1
 
     async def generate_structured(
         self,
@@ -163,11 +190,30 @@ class MockInferenceBackend(InferenceBackend):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Return a deterministic mock structured JSON response."""
-        raw = _RESPONSE_TEMPLATES["json"].replace("{model_id}", model_id)
-        return json.loads(raw)
+        self.active_concurrency += 1
+        self.max_observed_concurrency = max(self.max_observed_concurrency, self.active_concurrency)
+        self.generation_calls.append(
+            {
+                "model_id": model_id,
+                "prompt": prompt,
+                "system_prompt": system_prompt,
+                "temperature": temperature,
+                "keep_alive": keep_alive,
+                "structured": True,
+                **kwargs,
+            }
+        )
+        _LOADED_MODELS.add(model_id)
+        self.loaded_models.add(model_id)
+        try:
+            raw = _RESPONSE_TEMPLATES["json"].replace("{model_id}", model_id)
+            return json.loads(raw)
+        finally:
+            self.active_concurrency -= 1
 
     async def health_check(self) -> bool:
         """Return the configured health state (default: always healthy)."""

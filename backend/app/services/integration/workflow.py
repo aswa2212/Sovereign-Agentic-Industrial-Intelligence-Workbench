@@ -40,9 +40,11 @@ from app.services.ingestion.service import IngestionService
 from app.services.integration.exceptions import (
     DocumentIngestionStageError,
     IntegrationError,
+    ModelAllocationError,
     ValidationGateError,
     WorkflowTimeoutError,
 )
+from app.services.router.taxonomy import Capability, ModelRole
 from app.services.integration.models import (
     ArtifactSummary,
     CorrosionAuditWorkflowRequest,
@@ -496,27 +498,41 @@ class CorrosionAuditWorkflow:
             )
 
             tier_config = self.model_manager.get_tier_config()
-            role_key = route_decision.model_role.value if hasattr(route_decision.model_role, "value") else str(route_decision.model_role)
-            mapped_role = (
-                "vision" if "vision" in role_key.lower()
-                else ("reasoning" if "reason" in role_key.lower()
-                else ("router" if "fast" in role_key.lower() else "reasoning"))
+            role_key = (
+                route_decision.model_role.value
+                if hasattr(route_decision.model_role, "value")
+                else str(route_decision.model_role)
             )
-            model_entry = tier_config.get_model(mapped_role) or tier_config.get_model("reasoning")
-            vision_entry = tier_config.get_model("vision")
+
+            # Resolve model entry directly from active tier by requested role (no string-collapsing or silent fallback)
+            model_entry = tier_config.get_model(role_key)
+            if model_entry is None:
+                tier_desc = getattr(tier_config, "description", "active tier")
+                st_model.status = StageStatus.FAILED
+                st_model.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                st_model.completed_at = utc_now_iso()
+                st_model.error = f"Requested model role '{role_key}' is not configured in active tier ({tier_desc})."
+                stages_telemetry.append(st_model)
+                raise ModelAllocationError(
+                    f"Requested model role '{role_key}' is not configured in active hardware tier ({tier_desc}). "
+                    "Fail closed without silent fallback.",
+                    details={"role": role_key, "tier_description": tier_desc},
+                )
+
+            vision_entry = tier_config.get_model(ModelRole.VISION.value)
 
             try:
                 available_models = await self.model_manager.list_models()
                 models_count = len(available_models)
             except Exception:
-                models_count = len(tier_config.models) if hasattr(tier_config, "models") else 1
+                models_count = len(tier_config.list_roles()) if hasattr(tier_config, "list_roles") else 1
 
             model_allocation_dict = {
                 "assigned_role": role_key,
-                "tier_role": mapped_role,
-                "assigned_model_tag": model_entry.model_tag if model_entry else None,
+                "tier_role": role_key,
+                "assigned_model_tag": model_entry.model_tag,
                 "vision_model_tag": vision_entry.model_tag if vision_entry else None,
-                "resolved_model_tag": model_entry.model_tag if model_entry else None,
+                "resolved_model_tag": model_entry.model_tag,
                 "provider": "ollama" if request.execution_mode == WorkflowExecutionMode.LIVE else "mock",
                 "available_models_count": models_count,
                 "is_mock": True if request.execution_mode == WorkflowExecutionMode.DETERMINISTIC else False,
@@ -528,11 +544,11 @@ class CorrosionAuditWorkflow:
             st_model.details = model_allocation_dict
             stages_telemetry.append(st_model)
 
-            # Branch execution based on routed capability / model role
+            # Branch execution based on routed capability / model role (strict enum/value equality)
             is_vision_task = (
-                role_key.lower() == "vision"
-                or mapped_role == "vision"
-                or getattr(route_decision.model_role, "value", str(route_decision.model_role)).lower() == "vision"
+                route_decision.model_role == ModelRole.VISION
+                or (hasattr(route_decision.capability, "value") and route_decision.capability.value == Capability.VISION.value)
+                or str(route_decision.capability) == Capability.VISION.value
             )
 
             if is_vision_task:

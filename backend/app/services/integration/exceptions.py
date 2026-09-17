@@ -31,6 +31,13 @@ class ModelRoutingStageError(IntegrationError):
         super().__init__(message, stage="routing", details=details)
 
 
+class ModelAllocationError(IntegrationError):
+    """Raised when resolving or allocating a configured model for a role fails."""
+
+    def __init__(self, message: str, details: dict = None) -> None:
+        super().__init__(message, stage="model_allocation", details=details)
+
+
 class AgentExecutionStageError(IntegrationError):
     """Raised when agent state machine or tool execution fails."""
 

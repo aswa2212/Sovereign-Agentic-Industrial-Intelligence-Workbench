@@ -19,13 +19,14 @@ from typing import Any, Dict, List, Optional
 try:
     from app.core.config import get_settings
     from app.services.model_manager.base import InferenceBackend, ModelInfo
-    from app.services.model_manager.config_loader import ModelTiersConfig, TierConfig, load_model_tiers
+    from app.services.model_manager.config_loader import ModelEntry, ModelTiersConfig, TierConfig, load_model_tiers
     from app.services.model_manager.mock_adapter import MockInferenceBackend
     from app.services.model_manager.ollama_adapter import OllamaAdapter
 except ImportError:
     from backend.app.core.config import get_settings
     from backend.app.services.model_manager.base import InferenceBackend, ModelInfo
     from backend.app.services.model_manager.config_loader import (
+        ModelEntry,
         ModelTiersConfig,
         TierConfig,
         load_model_tiers,
@@ -63,6 +64,10 @@ class ModelManager:
         self._tier = tier_config
         # Semaphore prevents concurrent heavy-model loads on constrained hardware
         self._load_semaphore = asyncio.Semaphore(max_concurrent_loads)
+        # Execution lock serialises heavyweight model execution on max_concurrent_models == 1
+        self._execution_lock = asyncio.Lock()
+        self._active_role: Optional[str] = None
+        self._active_model_tag: Optional[str] = None
         self._initialized = False
 
     # ------------------------------------------------------------------ #
@@ -148,17 +153,56 @@ class ModelManager:
         """Return the active hardware tier configuration."""
         return self._tier
 
+    @property
+    def active_role(self) -> Optional[str]:
+        """Return the role of the model currently active/resident in VRAM."""
+        return self._active_role
+
+    @property
+    def active_model_tag(self) -> Optional[str]:
+        """Return the tag of the model currently active/resident in VRAM."""
+        return self._active_model_tag
+
     # ------------------------------------------------------------------ #
-    # Model lifecycle
+    # Internal lifecycle helpers (assumes _execution_lock is held)
+    # ------------------------------------------------------------------ #
+
+    async def _ensure_model_resident(self, role: str, entry: ModelEntry) -> None:
+        """
+        Ensure the requested model is resident, unloading any previously active
+        heavyweight model when max_concurrent_models == 1.
+
+        CRITICAL: Assumes self._execution_lock is already held by the caller.
+        """
+        if self._tier.max_concurrent_models == 1:
+            if self._active_role is not None and (
+                self._active_role != role or self._active_model_tag != entry.model_tag
+            ):
+                if self._active_model_tag:
+                    logger.info(
+                        "VRAM serial swap: unloading active role '%s' (%s) before activating '%s' (%s)",
+                        self._active_role,
+                        self._active_model_tag,
+                        role,
+                        entry.model_tag,
+                    )
+                    await self._backend.unload_model(self._active_model_tag)
+                self._active_role = None
+                self._active_model_tag = None
+
+        self._active_role = role
+        self._active_model_tag = entry.model_tag
+
+    # ------------------------------------------------------------------ #
+    # Model lifecycle (public methods)
     # ------------------------------------------------------------------ #
 
     async def load_model_for_role(self, role: str) -> bool:
         """
         Load the model assigned to the given role in the active tier.
 
-        The VRAM semaphore serialises concurrent load requests so the 8 GB
-        VRAM budget is never exceeded.  If two coroutines simultaneously request
-        different models, one will wait until the other completes.
+        When max_concurrent_models == 1, acquires _execution_lock, evicts any
+        previously loaded model, and loads the requested model.
 
         Args:
             role: One of 'router', 'reasoning', 'coder', 'vision', 'embedding'.
@@ -171,14 +215,27 @@ class ModelManager:
             logger.warning("No model configured for role '%s' in active tier.", role)
             return False
 
-        async with self._load_semaphore:
-            logger.info("Loading model '%s' for role '%s'.", entry.model_tag, role)
-            success = await self._backend.load_model(entry.model_tag)
-            if success:
-                logger.info("Model '%s' loaded successfully.", entry.model_tag)
-            else:
-                logger.error("Failed to load model '%s'.", entry.model_tag)
-            return success
+        if self._tier.max_concurrent_models == 1:
+            async with self._execution_lock:
+                await self._ensure_model_resident(role, entry)
+                logger.info("Loading model '%s' for role '%s'.", entry.model_tag, role)
+                success = await self._backend.load_model(entry.model_tag)
+                if success:
+                    logger.info("Model '%s' loaded successfully.", entry.model_tag)
+                else:
+                    logger.error("Failed to load model '%s'.", entry.model_tag)
+                return success
+        else:
+            async with self._load_semaphore:
+                logger.info("Loading model '%s' for role '%s'.", entry.model_tag, role)
+                success = await self._backend.load_model(entry.model_tag)
+                if success:
+                    self._active_role = role
+                    self._active_model_tag = entry.model_tag
+                    logger.info("Model '%s' loaded successfully.", entry.model_tag)
+                else:
+                    logger.error("Failed to load model '%s'.", entry.model_tag)
+                return success
 
     async def unload_model_for_role(self, role: str) -> bool:
         """
@@ -194,7 +251,19 @@ class ModelManager:
             return False
 
         logger.info("Unloading model '%s' for role '%s'.", entry.model_tag, role)
-        return await self._backend.unload_model(entry.model_tag)
+        if self._tier.max_concurrent_models == 1:
+            async with self._execution_lock:
+                success = await self._backend.unload_model(entry.model_tag)
+                if success and (self._active_role == role or self._active_model_tag == entry.model_tag):
+                    self._active_role = None
+                    self._active_model_tag = None
+                return success
+        else:
+            success = await self._backend.unload_model(entry.model_tag)
+            if success and (self._active_role == role or self._active_model_tag == entry.model_tag):
+                self._active_role = None
+                self._active_model_tag = None
+            return success
 
     # ------------------------------------------------------------------ #
     # High-level generation (role-based, never model-ID-based in callers)
@@ -206,16 +275,21 @@ class ModelManager:
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> str:
         """
         Generate text using the model assigned to the given role.
 
+        When max_concurrent_models == 1, execution is serialised under _execution_lock,
+        ensuring any differing active model is unloaded before execution starts.
+
         Args:
             role:          Model role ('router', 'reasoning', 'coder', 'vision', 'embedding').
             prompt:        The user prompt.
             system_prompt: Optional system/instruction prompt.
-            temperature:   Sampling temperature (lower → more deterministic).
+            temperature:   Sampling temperature (lower -> more deterministic).
+            keep_alive:    Optional override for model unload duration (defaults to tier.swap_keep_alive).
 
         Returns:
             Generated text string.
@@ -230,13 +304,29 @@ class ModelManager:
                 f"'{self._tier.description}'."
             )
 
-        return await self._backend.generate(
-            model_id=entry.model_tag,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=temperature,
-            **kwargs,
-        )
+        ka = kwargs.pop("keep_alive", keep_alive)
+        effective_keep_alive = ka if ka is not None else getattr(self._tier, "swap_keep_alive", None)
+
+        if self._tier.max_concurrent_models == 1:
+            async with self._execution_lock:
+                await self._ensure_model_resident(role, entry)
+                return await self._backend.generate(
+                    model_id=entry.model_tag,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    keep_alive=effective_keep_alive,
+                    **kwargs,
+                )
+        else:
+            return await self._backend.generate(
+                model_id=entry.model_tag,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                keep_alive=effective_keep_alive,
+                **kwargs,
+            )
 
     async def generate_structured(
         self,
@@ -244,10 +334,14 @@ class ModelManager:
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Generate a structured JSON response using the model assigned to the role.
+
+        When max_concurrent_models == 1, execution is serialised under _execution_lock,
+        ensuring any differing active model is unloaded before execution starts.
 
         Returns:
             Parsed Python dict.
@@ -263,10 +357,26 @@ class ModelManager:
                 f"'{self._tier.description}'."
             )
 
-        return await self._backend.generate_structured(
-            model_id=entry.model_tag,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=temperature,
-            **kwargs,
-        )
+        ka = kwargs.pop("keep_alive", keep_alive)
+        effective_keep_alive = ka if ka is not None else getattr(self._tier, "swap_keep_alive", None)
+
+        if self._tier.max_concurrent_models == 1:
+            async with self._execution_lock:
+                await self._ensure_model_resident(role, entry)
+                return await self._backend.generate_structured(
+                    model_id=entry.model_tag,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    keep_alive=effective_keep_alive,
+                    **kwargs,
+                )
+        else:
+            return await self._backend.generate_structured(
+                model_id=entry.model_tag,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                keep_alive=effective_keep_alive,
+                **kwargs,
+            )

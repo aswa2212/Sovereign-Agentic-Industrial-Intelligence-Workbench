@@ -59,6 +59,7 @@ class InferenceBackend(ABC):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> str:
         """Generate a complete text response from the model."""
@@ -71,6 +72,7 @@ class InferenceBackend(ABC):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
+        keep_alive: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """
