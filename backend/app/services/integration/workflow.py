@@ -108,7 +108,7 @@ class CorrosionAuditWorkflow:
         self.evidence_extractor = evidence_extractor or EngineeringEvidenceExtractor()
         self.router = router or RuleRouter()
         self.model_manager = model_manager or get_model_manager()
-        self.retriever = retriever or SovereignRetriever()
+        self.retriever = retriever or SovereignRetriever(model_manager=self.model_manager)
         self.sandbox_executor = sandbox_executor or SubprocessSandboxExecutor()
         self.validation_service = validation_service or StructuredOutputService()
         self.audit_service = audit_service or get_audit_service()

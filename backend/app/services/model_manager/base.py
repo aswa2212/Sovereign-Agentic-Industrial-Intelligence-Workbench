@@ -89,3 +89,11 @@ class InferenceBackend(ABC):
         Returns True if healthy, False if the backend is unreachable.
         """
         pass
+
+    @abstractmethod
+    async def embed(self, model_id: str, texts: List[str]) -> List[List[float]]:
+        """
+        Generate dense embeddings for a batch of texts using a local model.
+        Runs on CPU/local memory without GPU VRAM residency requirements.
+        """
+        pass

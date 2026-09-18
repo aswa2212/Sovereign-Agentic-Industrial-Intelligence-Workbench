@@ -7,7 +7,7 @@ Supports Windows development, Linux workstations, and on-premise container deplo
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Union
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -162,6 +162,12 @@ class Settings(BaseSettings):
         elif isinstance(v, list):
             return v
         return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    @model_validator(mode="after")
+    def _resolve_paths(self) -> "Settings":
+        if not self.knowledge_dir.is_absolute():
+            self.knowledge_dir = self.get_resolved_path(self.knowledge_dir)
+        return self
 
     def get_resolved_path(self, relative_or_absolute: Union[str, Path]) -> Path:
         """

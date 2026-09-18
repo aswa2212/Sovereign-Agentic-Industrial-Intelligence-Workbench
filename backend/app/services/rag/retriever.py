@@ -5,7 +5,7 @@ and citation provenance generation.
 """
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 try:
     from app.core.config import get_settings
@@ -20,7 +20,11 @@ try:
         RetrievedChunk,
     )
     from app.services.rag.chunker import HierarchicalChunker
-    from app.services.rag.embeddings import MockEmbeddingProvider, OllamaEmbeddingProvider
+    from app.services.rag.embeddings import (
+        MockEmbeddingProvider,
+        ModelManagerEmbeddingProvider,
+        OllamaEmbeddingProvider,
+    )
     from app.services.rag.vector_store import LocalJsonVectorStore
 except ImportError:
     from backend.app.core.config import get_settings
@@ -35,7 +39,11 @@ except ImportError:
         RetrievedChunk,
     )
     from backend.app.services.rag.chunker import HierarchicalChunker
-    from backend.app.services.rag.embeddings import MockEmbeddingProvider, OllamaEmbeddingProvider
+    from backend.app.services.rag.embeddings import (
+        MockEmbeddingProvider,
+        ModelManagerEmbeddingProvider,
+        OllamaEmbeddingProvider,
+    )
     from backend.app.services.rag.vector_store import LocalJsonVectorStore
 
 logger = logging.getLogger(__name__)
@@ -55,10 +63,12 @@ class SovereignRetriever:
         default_top_k: Optional[int] = None,
         default_threshold: Optional[float] = None,
         force_real_embeddings: bool = False,
+        model_manager: Optional[Any] = None,
     ) -> None:
         settings = get_settings()
         self.vector_store = vector_store or LocalJsonVectorStore()
         self._force_real = force_real_embeddings
+        self.model_manager = model_manager
 
         if embedding_provider is not None:
             if self._force_real and (
@@ -69,6 +79,20 @@ class SovereignRetriever:
                     "Real local embedding model unavailable: cannot use MockEmbeddingProvider when force_real_embeddings is active."
                 )
             self.embedding_provider = embedding_provider
+        elif model_manager is not None:
+            store_dim = self.vector_store.get_status().get("dimension", 768)
+            mm_provider = ModelManagerEmbeddingProvider(model_manager, dim=store_dim or 768)
+            if self._force_real:
+                if not mm_provider.is_available():
+                    raise EmbeddingModelUnavailableError(
+                        "Real local embedding model unavailable in ModelManager."
+                    )
+                self.embedding_provider = mm_provider
+            else:
+                if mm_provider.is_available():
+                    self.embedding_provider = mm_provider
+                else:
+                    self.embedding_provider = MockEmbeddingProvider(dim=768 if store_dim == 768 else 384)
         else:
             store_dim = self.vector_store.get_status().get("dimension", 0)
             if self._force_real:

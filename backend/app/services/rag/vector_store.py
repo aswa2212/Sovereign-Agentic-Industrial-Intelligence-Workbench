@@ -44,9 +44,10 @@ class LocalJsonVectorStore(BaseVectorStore):
         auto_load: bool = True,
     ) -> None:
         settings = get_settings()
-        base_dir = storage_dir or settings.knowledge_dir
+        raw_base = storage_dir or settings.knowledge_dir
+        base_dir = settings.get_resolved_path(raw_base)
         self.index_id = index_id
-        self.storage_dir = Path(base_dir) / index_id
+        self.storage_dir = base_dir / index_id
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         self.index_path = self.storage_dir / "index.npy"
@@ -187,12 +188,21 @@ class LocalJsonVectorStore(BaseVectorStore):
 
         try:
             # 1. Load numpy matrix
-            self._matrix = np.load(self.index_path)
+            loaded_matrix = np.load(self.index_path)
 
             # 2. Load metadata JSON
             with open(self.metadata_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self._chunks = [DocumentChunk.model_validate(item) for item in data]
+                loaded_chunks = [DocumentChunk.model_validate(item) for item in data]
+
+            if loaded_matrix.shape[0] != len(loaded_chunks):
+                raise VectorStoreError(
+                    f"Vector/metadata count mismatch in '{self.index_id}': "
+                    f"matrix has {loaded_matrix.shape[0]} rows but metadata has {len(loaded_chunks)} chunks."
+                )
+
+            self._matrix = loaded_matrix
+            self._chunks = loaded_chunks
 
             logger.info(
                 "Loaded vector store '%s' from disk: %d chunks, %d dimensions",
@@ -202,6 +212,8 @@ class LocalJsonVectorStore(BaseVectorStore):
             )
             return True
         except Exception as e:
+            self._matrix = None
+            self._chunks = []
             logger.error("Failed to load vector store '%s': %s", self.index_id, str(e))
             raise VectorStoreError(f"Vector store load failed: {str(e)}") from e
 

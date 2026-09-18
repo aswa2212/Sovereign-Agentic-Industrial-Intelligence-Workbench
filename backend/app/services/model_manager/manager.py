@@ -380,3 +380,34 @@ class ModelManager:
                 keep_alive=effective_keep_alive,
                 **kwargs,
             )
+
+    async def embed(
+        self,
+        role: str,
+        texts: List[str],
+    ) -> List[List[float]]:
+        """
+        Generate dense embeddings for a list of texts using the model assigned to the role.
+
+        Embedding models run on CPU (or local memory) and do not participate in
+        heavyweight GPU VRAM residency eviction, preserving serial generation model
+        lifecycle without GPU contention.
+
+        Args:
+            role: Model role, typically 'embedding'.
+            texts: List of text strings to embed.
+
+        Returns:
+            List of normalized embedding vectors (floats).
+
+        Raises:
+            ValueError: If no model is configured for the role.
+        """
+        entry = self._tier.get_model(role)
+        if entry is None:
+            raise ValueError(
+                f"No model configured for role '{role}' in active tier "
+                f"'{self._tier.description}'."
+            )
+
+        return await self._backend.embed(model_id=entry.model_tag, texts=texts)

@@ -171,6 +171,8 @@ class LocalSentenceTransformerEmbeddingProvider(EmbeddingProvider):
 class ModelManagerEmbeddingProvider(EmbeddingProvider):
     """
     Adapter bridging RAG embedding requests through Phase 2 ModelManager.
+    Routes embedding operations through the ModelManager role abstraction
+    while respecting CPU execution without GPU VRAM eviction.
     """
 
     def __init__(self, model_manager: Any, dim: int = 768) -> None:
@@ -183,7 +185,22 @@ class ModelManagerEmbeddingProvider(EmbeddingProvider):
     def is_available(self) -> bool:
         try:
             tier = self._model_manager.get_tier_config()
-            return tier.get_model("embedding") is not None
+            entry = tier.get_model("embedding")
+            if entry is None:
+                return False
+            backend = getattr(self._model_manager, "_backend", None)
+            if backend is not None and hasattr(backend, "_client"):
+                # OllamaAdapter: check if reachable on loopback
+                base_url = getattr(backend, "_base_url", "http://127.0.0.1:11434")
+                with httpx.Client(timeout=1.0) as client:
+                    resp = client.get(f"{base_url}/api/tags")
+                    if resp.status_code == 200:
+                        models = resp.json().get("models", [])
+                        tag_names = [m.get("name", "") for m in models]
+                        base_tag = entry.model_tag.split(":")[0]
+                        return any(base_tag in name for name in tag_names)
+                    return False
+            return True
         except Exception:
             return False
 
@@ -200,17 +217,32 @@ class ModelManagerEmbeddingProvider(EmbeddingProvider):
             raise EmbeddingModelUnavailableError(
                 "ModelManager has no configured 'embedding' role in active hardware tier."
             )
-        # In mock or local environments, return normalized vector
-        provider = MockEmbeddingProvider(dim=self._dim)
-        return await provider.embed_text(text)
+        vectors = await self.embed_texts([text])
+        if not vectors or not vectors[0]:
+            raise EmbeddingModelUnavailableError("Embedding backend returned empty vector.")
+        return vectors[0]
 
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
         if not self.is_available():
             raise EmbeddingModelUnavailableError(
                 "ModelManager has no configured 'embedding' role in active hardware tier."
             )
-        provider = MockEmbeddingProvider(dim=self._dim)
-        return await provider.embed_texts(texts)
+        if not texts:
+            return []
+        try:
+            vectors = await self._model_manager.embed("embedding", texts)
+            for vec in vectors:
+                if len(vec) != self._dim:
+                    raise EmbeddingModelUnavailableError(
+                        f"Embedding dimension mismatch: expected {self._dim}, got {len(vec)}"
+                    )
+            return vectors
+        except EmbeddingModelUnavailableError:
+            raise
+        except Exception as exc:
+            raise EmbeddingModelUnavailableError(
+                f"ModelManager embedding generation failed: {exc}"
+            ) from exc
 
 
 class OllamaEmbeddingProvider(EmbeddingProvider):

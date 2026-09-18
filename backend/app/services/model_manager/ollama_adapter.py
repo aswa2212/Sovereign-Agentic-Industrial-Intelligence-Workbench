@@ -259,6 +259,44 @@ class OllamaAdapter(InferenceBackend):
         except Exception:
             return False
 
+    async def embed(self, model_id: str, texts: List[str]) -> List[List[float]]:
+        """
+        Generate dense embeddings for texts via Ollama loopback endpoint POST /api/embeddings.
+        Runs entirely on CPU without GPU residency.
+        """
+        if not texts:
+            return []
+
+        resolved_id = await self._resolve_model_tag(model_id)
+        results: List[List[float]] = []
+
+        for text in texts:
+            if not text:
+                results.append([])
+                continue
+            payload = {"model": resolved_id, "prompt": text}
+            try:
+                resp = await self._client.post("/api/embeddings", json=payload)
+                if resp.status_code != 200:
+                    raise RuntimeError(
+                        f"Ollama embedding request failed with status {resp.status_code}: {resp.text}"
+                    )
+                data = resp.json()
+                raw_emb = data.get("embedding", [])
+                norm = sum(x * x for x in raw_emb) ** 0.5
+                if norm > 1e-12:
+                    normalized = [round(x / norm, 6) for x in raw_emb]
+                else:
+                    normalized = [0.0] * len(raw_emb)
+                results.append(normalized)
+            except Exception as exc:
+                logger.error("Ollama embed error for model '%s': %s", resolved_id, str(exc))
+                raise RuntimeError(
+                    f"Local Ollama embedding failed for '{resolved_id}': {exc}"
+                ) from exc
+
+        return results
+
     async def aclose(self) -> None:
         """Close the underlying httpx.AsyncClient. Call during application shutdown."""
         await self._client.aclose()

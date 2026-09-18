@@ -218,3 +218,16 @@ class MockInferenceBackend(InferenceBackend):
     async def health_check(self) -> bool:
         """Return the configured health state (default: always healthy)."""
         return self._always_healthy
+
+    async def embed(self, model_id: str, texts: List[str]) -> List[List[float]]:
+        """Return deterministic mock dense embeddings for testing."""
+        if not texts:
+            return []
+        try:
+            from app.services.rag.embeddings import MockEmbeddingProvider
+        except ImportError:
+            from backend.app.services.rag.embeddings import MockEmbeddingProvider
+
+        dim = 768 if any(k in model_id.lower() for k in ("nomic", "768", "bge-base")) else 384
+        provider = MockEmbeddingProvider(dim=dim)
+        return await provider.embed_texts(texts)

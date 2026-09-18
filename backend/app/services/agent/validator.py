@@ -45,14 +45,41 @@ class Validator:
 
         # Check 3: Retrieval grounding (if RAG capability was requested)
         rag_planned = False
-        if context.plan:
+        if context.plan and context.plan.steps:
             rag_planned = any(s.capability == "rag_retrieval" for s in context.plan.steps)
 
-        if rag_planned:
-            if context.retrieved_context:
+        if not rag_planned:
+            # Case 4: RAG not planned
+            checks_passed.append("retrieval_not_planned")
+        else:
+            rag_obs = [
+                obs for obs in context.observations
+                if obs.capability == "rag_retrieval" or obs.tool_name == "rag_retrieval"
+            ]
+            if not rag_obs:
+                # Case 5: RAG planned but tool never executed
+                checks_failed.append("planned_retrieval_step_not_executed")
+                checks_failed.append("missing_required_retrieval_grounding")
+            elif any(not obs.success for obs in rag_obs):
+                # Case 1: RAG tool execution raised an exception or failed
+                checks_failed.append("retrieval_tool_execution_failed")
+                checks_failed.append("missing_required_retrieval_grounding")
+            elif context.retrieved_context:
+                # Case 3: RAG tool successful and retrieved relevant chunks
                 checks_passed.append("grounding_citations_present")
             else:
-                checks_failed.append("missing_required_retrieval_grounding")
+                # Check if the tool explicitly executed and returned a verified zero-result payload
+                zero_result_verified = any(
+                    isinstance(obs.output, dict) and obs.output.get("retrieved_count") == 0
+                    for obs in rag_obs
+                )
+                if zero_result_verified:
+                    # Case 2: RAG tool executed successfully but returned zero relevant chunks (insufficient knowledge).
+                    # Valid execution with no matching knowledge; represents insufficient knowledge without fabricating grounding.
+                    checks_passed.append("retrieval_completed_insufficient_knowledge")
+                else:
+                    # Missing grounding without verified zero-result retrieval payload
+                    checks_failed.append("missing_required_retrieval_grounding")
 
         # Check 4: Unresolved fatal execution errors
         if not context.errors:
