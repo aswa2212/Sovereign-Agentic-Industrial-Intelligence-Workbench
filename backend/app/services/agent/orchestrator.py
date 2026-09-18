@@ -201,58 +201,70 @@ class AgentStateMachineOrchestrator:
             )
 
             if not context.plan.steps:
-                # No steps generated -> proceed directly to validation
-                AgentStateMachine.transition(
-                    context, AgentState.VALIDATE, message="No plan steps required; verifying directly"
-                )
-            else:
-                # ── 4. EXECUTE / OBSERVE / REFLECT Loop ────────────────────────
-                while context.current_step_index < len(context.plan.steps):
-                    # Check global timeout
-                    if time.monotonic() - start_time > self.global_timeout:
-                        raise AgentTimeoutError(
-                            f"Global execution timeout exceeded ({self.global_timeout}s)."
-                        )
+                raise PlanningError("Generated plan contains no executable steps.")
 
-                    step = context.plan.steps[context.current_step_index]
-                    step.status = "in_progress"
-                    context.step_count += 1
-
-                    # EXECUTE state
-                    AgentStateMachine.transition(
-                        context,
-                        AgentState.EXECUTE,
-                        message=f"Executing {step.id}: {step.description}",
-                        metadata={"capability": step.capability, "tool": step.tool_name},
+            # ── 4. EXECUTE / OBSERVE / REFLECT Loop ────────────────────────
+            while context.current_step_index < len(context.plan.steps):
+                # Check global timeout
+                if time.monotonic() - start_time > self.global_timeout:
+                    raise AgentTimeoutError(
+                        f"Global execution timeout exceeded ({self.global_timeout}s)."
                     )
-                    self._record_audit(
-                        "TOOL_STARTED",
-                        action=f"Invoking {step.tool_name}",
-                        task_id=context.task_id,
-                        agent_state="EXECUTE",
+
+                step = context.plan.steps[context.current_step_index]
+                step.status = "in_progress"
+                context.step_count += 1
+
+                # EXECUTE state
+                AgentStateMachine.transition(
+                    context,
+                    AgentState.EXECUTE,
+                    message=f"Executing {step.id}: {step.description}",
+                    metadata={"capability": step.capability, "tool": step.tool_name},
+                )
+                self._record_audit(
+                    "TOOL_STARTED",
+                    action=f"Invoking {step.tool_name}",
+                    task_id=context.task_id,
+                    agent_state="EXECUTE",
+                    tool_name=step.tool_name,
+                    capability=step.capability,
+                    metadata={"step_id": step.id},
+                )
+
+                tool = self.tool_registry.get_tool(step.tool_name)
+                obs = None
+
+                if not tool:
+                    step.status = "failed"
+                    obs = StepObservation(
+                        step_id=step.id,
                         tool_name=step.tool_name,
                         capability=step.capability,
-                        metadata={"step_id": step.id},
+                        success=False,
+                        error=f"Tool '{step.tool_name}' not found in registry.",
                     )
-
-                    tool = self.tool_registry.get_tool(step.tool_name)
-                    obs = None
-
-                    if not tool:
-                        obs = StepObservation(
-                            step_id=step.id,
-                            tool_name=step.tool_name,
-                            capability=step.capability,
-                            success=False,
-                            error=f"Tool '{step.tool_name}' not found in registry.",
+                else:
+                    try:
+                        # Step timeout protection
+                        tool_output = await asyncio.wait_for(
+                            tool.execute(step.input_payload, context),
+                            timeout=self.step_timeout,
                         )
-                    else:
-                        try:
-                            # Step timeout protection
-                            tool_output = await asyncio.wait_for(
-                                tool.execute(step.input_payload, context),
-                                timeout=self.step_timeout,
+                        # Explicit check: do not allow tool failure payload to silently become success
+                        if isinstance(tool_output, dict) and tool_output.get("success") is False:
+                            err = str(tool_output.get("error") or f"Tool '{step.tool_name}' returned explicit failure status.")
+                            step.status = "failed"
+                            step.output_payload = None
+                            obs = StepObservation(
+                                step_id=step.id,
+                                tool_name=step.tool_name,
+                                capability=step.capability,
+                                success=False,
+                                output=tool_output,
+                                error=err,
                             )
+                        else:
                             step.status = "completed"
                             step.output_payload = tool_output
                             context.tool_results[step.id] = tool_output
@@ -264,24 +276,28 @@ class AgentStateMachineOrchestrator:
                                 success=True,
                                 output=tool_output,
                             )
-                        except asyncio.TimeoutError:
-                            err = f"Step {step.id} timed out after {self.step_timeout}s."
-                            obs = StepObservation(
-                                step_id=step.id,
-                                tool_name=step.tool_name,
-                                capability=step.capability,
-                                success=False,
-                                error=err,
-                            )
-                        except Exception as e:
-                            logger.error("Tool execution failed: %s", str(e))
-                            obs = StepObservation(
-                                step_id=step.id,
-                                tool_name=step.tool_name,
-                                capability=step.capability,
-                                success=False,
-                                error=str(e),
-                            )
+                    except asyncio.TimeoutError:
+                        err = f"Step {step.id} timed out after {self.step_timeout}s."
+                        step.status = "failed"
+                        step.output_payload = None
+                        obs = StepObservation(
+                            step_id=step.id,
+                            tool_name=step.tool_name,
+                            capability=step.capability,
+                            success=False,
+                            error=err,
+                        )
+                    except Exception as e:
+                        logger.error("Tool execution failed: %s", str(e))
+                        step.status = "failed"
+                        step.output_payload = None
+                        obs = StepObservation(
+                            step_id=step.id,
+                            tool_name=step.tool_name,
+                            capability=step.capability,
+                            success=False,
+                            error=str(e),
+                        )
 
                     context.observations.append(obs)
                     self._record_audit(

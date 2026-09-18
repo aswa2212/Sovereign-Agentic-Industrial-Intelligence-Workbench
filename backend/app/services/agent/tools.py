@@ -73,6 +73,7 @@ class MockCalculationTool(AgentTool):
     """
     Deterministic calculation tool for industrial formulas (e.g. wall thickness, corrosion rate).
     Does NOT execute unsandboxed shell or arbitrary Python subprocesses.
+    Upholds Frozen Contract 1: EngineeringEvidence is authoritative for physical measurements.
     """
 
     name = "calculation"
@@ -81,9 +82,47 @@ class MockCalculationTool(AgentTool):
 
     async def execute(self, input_payload: Dict[str, Any], context: AgentContext) -> Dict[str, Any]:
         calc_type = input_payload.get("calc_type", "remaining_life")
-        t_actual = float(input_payload.get("t_actual", 10.5))
-        t_retired = float(input_payload.get("t_retired", 3.2))
-        corrosion_rate = float(input_payload.get("corrosion_rate", 0.25))
+
+        t_actual = None
+        t_retired = None
+        corrosion_rate = None
+        evidence_authoritative = False
+        evidence_source = None
+        evidence_sha256 = None
+
+        # Frozen Contract 1: EngineeringEvidence remains authoritative for physical measurements
+        if context.evidence:
+            ev = context.evidence
+            evidence_source = ev.get("source_filename")
+            evidence_sha256 = ev.get("source_sha256")
+
+            # Physical thickness measurement from authoritative evidence
+            if ev.get("current_thickness_mm") is not None:
+                t_actual = float(ev["current_thickness_mm"])
+                evidence_authoritative = True
+            elif ev.get("selected_measurement") and isinstance(ev["selected_measurement"], dict):
+                sel = ev["selected_measurement"]
+                if sel.get("thickness_mm") is not None:
+                    t_actual = float(sel["thickness_mm"])
+                    evidence_authoritative = True
+
+            # Minimum required thickness from evidence if specified
+            if ev.get("minimum_required_thickness_mm") is not None:
+                t_retired = float(ev["minimum_required_thickness_mm"])
+
+            # Corrosion rate from evidence if specified
+            if ev.get("corrosion_rate_mm_per_year") is not None:
+                corrosion_rate = float(ev["corrosion_rate_mm_per_year"])
+
+        # If not populated from authoritative evidence, use input_payload or defaults
+        if t_actual is None:
+            t_actual = float(input_payload.get("t_actual", 10.5))
+
+        if t_retired is None:
+            t_retired = float(input_payload.get("t_retired", 3.2))
+
+        if corrosion_rate is None:
+            corrosion_rate = float(input_payload.get("corrosion_rate", 0.25))
 
         if corrosion_rate <= 0:
             raise ToolExecutionError("Corrosion rate must be positive for remaining life estimation.")
@@ -91,7 +130,7 @@ class MockCalculationTool(AgentTool):
         remaining_thickness = round(t_actual - t_retired, 3)
         remaining_years = round(remaining_thickness / corrosion_rate, 2)
 
-        return {
+        res: Dict[str, Any] = {
             "calculation_type": calc_type,
             "nominal_or_actual_mm": t_actual,
             "retired_limit_mm": t_retired,
@@ -100,6 +139,13 @@ class MockCalculationTool(AgentTool):
             "remaining_life_years": remaining_years,
             "formula_applied": "(t_actual - t_retired) / corrosion_rate",
         }
+        if evidence_authoritative:
+            res["evidence_authoritative"] = True
+            res["evidence_source"] = evidence_source
+            res["evidence_sha256"] = evidence_sha256
+
+        return res
+
 
 
 class SandboxedCalculationTool(AgentTool):

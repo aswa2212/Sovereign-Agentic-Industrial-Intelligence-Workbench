@@ -29,6 +29,7 @@ try:
         AgentTimeoutError,
         InvalidStateTransitionError,
         PlanningError,
+        ToolExecutionError,
     )
     from app.services.agent.models import (
         AgentContext,
@@ -40,7 +41,7 @@ try:
     from app.services.agent.planner import Planner
     from app.services.agent.reflector import Reflector
     from app.services.agent.state_machine import AgentStateMachine
-    from app.services.agent.tools import MockCalculationTool, RAGRetrievalTool, ToolRegistry
+    from app.services.agent.tools import AgentTool, MockCalculationTool, RAGRetrievalTool, ToolRegistry
     from app.services.agent.validator import Validator
     from app.services.ingestion.models import NormalizedDocument
     from app.services.ingestion.storage import StorageManager
@@ -57,6 +58,7 @@ except ImportError:
         AgentTimeoutError,
         InvalidStateTransitionError,
         PlanningError,
+        ToolExecutionError,
     )
     from backend.app.services.agent.models import (
         AgentContext,
@@ -68,7 +70,7 @@ except ImportError:
     from backend.app.services.agent.planner import Planner
     from backend.app.services.agent.reflector import Reflector
     from backend.app.services.agent.state_machine import AgentStateMachine
-    from backend.app.services.agent.tools import MockCalculationTool, RAGRetrievalTool, ToolRegistry
+    from backend.app.services.agent.tools import AgentTool, MockCalculationTool, RAGRetrievalTool, ToolRegistry
     from backend.app.services.agent.validator import Validator
     from backend.app.services.ingestion.models import NormalizedDocument
     from backend.app.services.ingestion.storage import StorageManager
@@ -460,3 +462,332 @@ async def test_air_gap_no_outbound_network_calls(monkeypatch, tmp_path):
         "Find the minimum wall thickness requirement for Class 150 carbon steel process piping."
     )
     assert context.current_state == AgentState.DELIVER
+
+
+# ── 9. Phase 7 Authoritative Architectural Contracts & Invariants ─────────────
+
+class TestPhase7Contracts:
+    """
+    Directly verifies all 13 Phase 7 architectural mandates:
+    1. Complete successful state transition
+    2. Invalid transition rejection
+    3. Tool dispatch
+    4. Successful tool observation
+    5. Tool failure representation
+    6. Bounded retry/recovery
+    7. Recovery exhaustion (fails closed)
+    8. Validation failure
+    9. Successful finalize/deliver
+    10. No delivery after validation failure
+    11. RAG tool integration
+    12. Preservation of EngineeringEvidence authority
+    13. State isolation between workflow/task IDs
+    """
+
+    # 1. Complete successful state transition
+    @pytest.mark.anyio
+    async def test_contract_1_complete_successful_state_transition(self, tmp_path):
+        retriever = await seed_synthetic_sop_index(tmp_path)
+        tool_reg = ToolRegistry()
+        tool_reg.register(RAGRetrievalTool(retriever=retriever))
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+
+        ctx = await orchestrator.execute_task("Find the minimum wall thickness requirement for Class 150 carbon steel process piping.")
+        assert ctx.current_state == AgentState.DELIVER
+        assert ctx.final_result is not None
+        assert ctx.final_result["status"] == "success"
+
+        states = [event.state for event in ctx.execution_trace]
+        expected_sequence = [
+            AgentState.RECEIVE,
+            AgentState.UNDERSTAND,
+            AgentState.PLAN,
+            AgentState.EXECUTE,
+            AgentState.OBSERVE,
+            AgentState.REFLECT,
+            AgentState.VALIDATE,
+            AgentState.FINALIZE,
+            AgentState.DELIVER,
+        ]
+        for expected in expected_sequence:
+            assert expected in states
+
+    # 2. Invalid transition rejection
+    def test_contract_2_invalid_transition_rejection(self):
+        ctx = AgentContext(task_id="inv_test", user_request="Invalid jumps")
+
+        # PLAN -> DELIVER directly
+        ctx.current_state = AgentState.PLAN
+        with pytest.raises(InvalidStateTransitionError):
+            AgentStateMachine.transition(ctx, AgentState.DELIVER)
+
+        # EXECUTE -> DELIVER directly
+        ctx.current_state = AgentState.EXECUTE
+        with pytest.raises(InvalidStateTransitionError):
+            AgentStateMachine.transition(ctx, AgentState.DELIVER)
+
+        # VALIDATE -> DELIVER bypassing FINALIZE
+        ctx.current_state = AgentState.VALIDATE
+        with pytest.raises(InvalidStateTransitionError):
+            AgentStateMachine.transition(ctx, AgentState.DELIVER)
+
+        # Terminal state DELIVER -> IDLE
+        ctx.current_state = AgentState.DELIVER
+        with pytest.raises(InvalidStateTransitionError):
+            AgentStateMachine.transition(ctx, AgentState.IDLE)
+
+        # Terminal state FAILED -> PLAN
+        ctx.current_state = AgentState.FAILED
+        with pytest.raises(InvalidStateTransitionError):
+            AgentStateMachine.transition(ctx, AgentState.PLAN)
+
+    # 3. Tool dispatch
+    @pytest.mark.anyio
+    async def test_contract_3_tool_dispatch(self):
+        dispatched = []
+
+        class CustomAuditTool(AgentTool):
+            name = "custom_audit"
+            capability = "calculation"
+            description = "Custom test tool"
+
+            async def execute(self, input_payload, context):
+                dispatched.append(input_payload)
+                return {"computed_val": 42.0}
+
+        tool_reg = ToolRegistry()
+        tool_reg.register(CustomAuditTool())
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+
+        # Create a task that triggers calculation
+        ctx = await orchestrator.execute_task("calculate remaining life")
+        assert len(dispatched) >= 1
+        assert ctx.current_state == AgentState.DELIVER
+        assert ctx.tool_results.get("step_1", {}).get("computed_val") == 42.0
+
+    # 4. Successful tool observation
+    @pytest.mark.anyio
+    async def test_contract_4_successful_tool_observation(self):
+        tool = MockCalculationTool()
+        ctx = AgentContext(task_id="obs_success_task", user_request="Calc test")
+        res = await tool.execute({"t_actual": 12.0, "t_retired": 3.0, "corrosion_rate": 0.5}, ctx)
+
+        obs = StepObservation(
+            step_id="step_1",
+            tool_name=tool.name,
+            capability=tool.capability,
+            success=True,
+            output=res,
+        )
+        assert obs.success is True
+        assert obs.error is None
+        assert obs.output["remaining_life_years"] == 18.0
+
+    # 5. Tool failure representation
+    @pytest.mark.anyio
+    async def test_contract_5_tool_failure_representation(self):
+        class FailTool(AgentTool):
+            name = "fail_tool"
+            capability = "calculation"
+            description = "Fails intentionally"
+
+            async def execute(self, input_payload, context):
+                raise ToolExecutionError("Simulated tool crash")
+
+        tool_reg = ToolRegistry()
+        tool_reg.register(FailTool())
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+
+        ctx = await orchestrator.execute_task("calculate corrosion rate remaining life")
+        assert ctx.current_state == AgentState.FAILED
+        assert any(not obs.success for obs in ctx.observations)
+        failed_obs = [obs for obs in ctx.observations if not obs.success]
+        assert "Simulated tool crash" in failed_obs[0].error
+
+    # 6. Bounded retry/recovery
+    @pytest.mark.anyio
+    async def test_contract_6_bounded_retry_and_recovery(self):
+        class RecoveringTool(AgentTool):
+            name = "recovering_tool"
+            capability = "calculation"
+            description = "Fails once then succeeds"
+
+            def __init__(self):
+                self.calls = 0
+
+            async def execute(self, input_payload, context):
+                self.calls += 1
+                if self.calls == 1:
+                    raise ToolExecutionError("Transient glitch on attempt 1")
+                return {"status": "recovered", "attempt": self.calls}
+
+        rec_tool = RecoveringTool()
+        tool_reg = ToolRegistry()
+        tool_reg.register(rec_tool)
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+
+        ctx = await orchestrator.execute_task("calculate remaining life")
+        assert ctx.current_state == AgentState.DELIVER
+        assert rec_tool.calls == 2
+        assert ctx.retry_count == 1
+        assert len(ctx.observations) == 2
+        assert ctx.observations[0].success is False
+        assert ctx.observations[1].success is True
+
+    # 7. Recovery exhaustion (fails closed)
+    @pytest.mark.anyio
+    async def test_contract_7_recovery_exhaustion_fails_closed(self):
+        class PersistentFailureTool(AgentTool):
+            name = "persistent_fail"
+            capability = "calculation"
+            description = "Fails on all attempts"
+
+            def __init__(self):
+                self.calls = 0
+
+            async def execute(self, input_payload, context):
+                self.calls += 1
+                raise ToolExecutionError(f"Persistent failure attempt {self.calls}")
+
+        tool = PersistentFailureTool()
+        tool_reg = ToolRegistry()
+        tool_reg.register(tool)
+        reflector = Reflector(max_steps=8, max_retries=2)
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg, reflector=reflector)
+
+        ctx = await orchestrator.execute_task("calculate remaining life")
+        assert ctx.current_state == AgentState.FAILED
+        assert tool.calls == 3  # Initial attempt + 2 retries
+        assert ctx.retry_count == 2
+        assert any("MAX_RETRIES_EXCEEDED" in err or "retries" in err for err in ctx.errors)
+        # Verify no delivery or finalize was attempted
+        states = [event.state for event in ctx.execution_trace]
+        assert AgentState.FINALIZE not in states
+        assert AgentState.DELIVER not in states
+
+    # 8. Validation failure
+    @pytest.mark.anyio
+    async def test_contract_8_validation_failure(self):
+        validator = Validator()
+        step = PlanStep(id="s1", description="step", capability="calculation", tool_name="tool", status="in_progress")
+        plan = Plan(plan_id="p1", task_id="t1", goal="Goal", steps=[step])
+        ctx = AgentContext(
+            task_id="t_val_fail",
+            user_request="Calc",
+            plan=plan,
+            observations=[StepObservation(step_id="s1", tool_name="tool", capability="calculation", success=False, error="Tool failed")],
+            errors=["Execution error unresolved"],
+        )
+        res = await validator.validate(ctx)
+        assert res.is_valid is False
+        assert "uncompleted_plan_steps_remain" in res.checks_failed
+        assert "unresolved_execution_errors" in res.checks_failed
+
+    # 9. Successful finalize/deliver
+    @pytest.mark.anyio
+    async def test_contract_9_successful_finalize_and_deliver(self):
+        tool_reg = ToolRegistry()
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+        ctx = await orchestrator.execute_task("calculate remaining life")
+        assert ctx.current_state == AgentState.DELIVER
+        assert ctx.final_result is not None
+        assert ctx.final_result["status"] == "success"
+        assert "calculation" in ctx.final_result
+        assert ctx.final_result["calculation"]["nominal_or_actual_mm"] == 10.5
+
+    # 10. No delivery after validation failure
+    @pytest.mark.anyio
+    async def test_contract_10_no_delivery_after_validation_failure(self):
+        class BrokenValidator(Validator):
+            async def validate(self, context):
+                from app.services.agent.models import ValidationResult
+                return ValidationResult(
+                    is_valid=False,
+                    checks_passed=[],
+                    checks_failed=["authoritative_integrity_check_failed"],
+                    confidence=0.0,
+                    notes="Deterministic rejection",
+                )
+
+        tool_reg = ToolRegistry()
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg, validator=BrokenValidator())
+        ctx = await orchestrator.execute_task("calculate remaining life")
+        assert ctx.current_state == AgentState.FAILED
+        assert ctx.final_result is None
+        states = [event.state for event in ctx.execution_trace]
+        assert AgentState.FINALIZE not in states
+        assert AgentState.DELIVER not in states
+
+    # 11. RAG tool integration
+    @pytest.mark.anyio
+    async def test_contract_11_rag_tool_integration(self, tmp_path):
+        retriever = await seed_synthetic_sop_index(tmp_path)
+        tool_reg = ToolRegistry()
+        tool_reg.register(RAGRetrievalTool(retriever=retriever))
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+
+        ctx = await orchestrator.execute_task("Find the minimum wall thickness requirement for Class 150 carbon steel process piping.")
+        assert ctx.current_state == AgentState.DELIVER
+        assert len(ctx.retrieved_context) >= 1
+        assert ctx.final_result["citations_count"] >= 1
+        citation = ctx.final_result["citations"][0]
+        assert citation["source_document"] == "SOP-MRPL-PIP-001.pdf"
+        assert citation["page_number"] == 3
+
+    # 12. Preservation of EngineeringEvidence authority
+    @pytest.mark.anyio
+    async def test_contract_12_preservation_of_engineering_evidence_authority(self):
+        tool = MockCalculationTool()
+        # Authoritative EngineeringEvidence measurement: 6.8 mm
+        evidence_dict = {
+            "equipment_id": "P-101-DISCHARGE",
+            "current_thickness_mm": 6.8,
+            "minimum_required_thickness_mm": 3.2,
+            "corrosion_rate_mm_per_year": 0.20,
+            "source_filename": "UT_INSPECTION_P101.pdf",
+            "source_sha256": "aabbccddeeff00112233445566778899",
+        }
+        ctx = AgentContext(
+            task_id="evidence_auth_task",
+            user_request="Calculate remaining life",
+            evidence=evidence_dict,
+        )
+        # Even if payload supplies a conflicting or ungrounded value (e.g. 15.0 mm):
+        res = await tool.execute({"t_actual": 15.0}, ctx)
+        # EngineeringEvidence must remain authoritative!
+        assert res["nominal_or_actual_mm"] == 6.8
+        assert res["retired_limit_mm"] == 3.2
+        assert res["corrosion_allowance_remaining_mm"] == 3.6
+        assert res["remaining_life_years"] == 18.0
+        assert res["evidence_authoritative"] is True
+        assert res["evidence_source"] == "UT_INSPECTION_P101.pdf"
+        assert res["evidence_sha256"] == "aabbccddeeff00112233445566778899"
+
+    # 13. State isolation between workflow/task IDs
+    @pytest.mark.anyio
+    async def test_contract_13_state_isolation_between_tasks(self, tmp_path):
+        retriever = await seed_synthetic_sop_index(tmp_path)
+        tool_reg = ToolRegistry()
+        tool_reg.register(RAGRetrievalTool(retriever=retriever))
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=tool_reg)
+
+        ctx_1 = await orchestrator.execute_task(
+            "Find the minimum wall thickness requirement for Class 150 carbon steel process piping.",
+            task_id="task_isolated_001",
+        )
+        ctx_2 = await orchestrator.execute_task(
+            "calculate remaining life",
+            task_id="task_isolated_002",
+        )
+
+        assert ctx_1.task_id == "task_isolated_001"
+        assert ctx_2.task_id == "task_isolated_002"
+        # Task 1 retrieved chunks must NOT bleed into Task 2
+        assert len(ctx_1.retrieved_context) >= 1
+        assert len(ctx_2.retrieved_context) == 0
+        # Task 2 calculation result must NOT bleed into Task 1
+        assert ctx_2.final_result["calculation"] is not None
+        assert ctx_1.final_result["calculation"] is None
+        # Tasks are independently retrieved from orchestrator
+        assert orchestrator.get_task_context("task_isolated_001") is ctx_1
+        assert orchestrator.get_task_context("task_isolated_002") is ctx_2
