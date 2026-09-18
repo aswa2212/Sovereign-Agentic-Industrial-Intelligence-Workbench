@@ -152,10 +152,11 @@ class SandboxedCalculationTool(AgentTool):
     """
     Sandboxed calculation tool wrapping SubprocessSandboxExecutor.
     Enforces process isolation, policy restrictions, and fail-closed validation.
+    Upholds Frozen Contract 1: EngineeringEvidence is authoritative for physical measurements.
     """
 
     name = "sandboxed_calculation"
-    capability = "calculation"
+    capability = "sandboxed_calculation"
     description = "Executes deterministic engineering calculations inside a constrained sandbox."
 
     def __init__(self, executor: Optional[Any] = None) -> None:
@@ -176,9 +177,72 @@ class SandboxedCalculationTool(AgentTool):
 
         tool_name = input_payload.get("tool_name", "minimum_wall_thickness_check")
         if "input" in input_payload and isinstance(input_payload["input"], dict):
-            tool_input = input_payload["input"]
+            tool_input = dict(input_payload["input"])
         else:
             tool_input = {k: v for k, v in input_payload.items() if k not in ("tool_name", "execution_mode")}
+
+        evidence_authoritative = False
+        evidence_source = None
+        evidence_sha256 = None
+        field_provenance: Dict[str, str] = {}
+
+        # Frozen Contract 1: EngineeringEvidence remains authoritative for physical measurements
+        if context.evidence:
+            ev = context.evidence.model_dump() if hasattr(context.evidence, "model_dump") else (
+                dict(context.evidence) if isinstance(context.evidence, dict) else {}
+            )
+            evidence_source = ev.get("source_filename")
+            evidence_sha256 = ev.get("source_sha256")
+
+            # Resolve physical thickness measurement
+            meas_thickness = None
+            if ev.get("current_thickness_mm") is not None:
+                meas_thickness = float(ev["current_thickness_mm"])
+            elif ev.get("selected_measurement"):
+                sel = ev["selected_measurement"]
+                sel_dict = sel.model_dump() if hasattr(sel, "model_dump") else (sel if isinstance(sel, dict) else {})
+                if sel_dict.get("thickness_mm") is not None:
+                    meas_thickness = float(sel_dict["thickness_mm"])
+
+            # 1. minimum_wall_thickness_check
+            if tool_name == "minimum_wall_thickness_check":
+                if meas_thickness is not None:
+                    tool_input["measured_thickness_mm"] = meas_thickness
+                    evidence_authoritative = True
+                    field_provenance["measured_thickness_mm"] = ev.get("current_thickness_source", "ENGINEERING_EVIDENCE")
+
+                if ev.get("minimum_required_thickness_mm") is not None:
+                    tool_input["minimum_required_mm"] = float(ev["minimum_required_thickness_mm"])
+                    evidence_authoritative = True
+                    field_provenance["minimum_required_mm"] = ev.get("minimum_thickness_source", "ENGINEERING_EVIDENCE")
+
+                if ev.get("equipment_id") and "component_id" not in tool_input:
+                    tool_input["component_id"] = str(ev["equipment_id"])
+
+            # 2. corrosion_rate_calc
+            elif tool_name == "corrosion_rate_calc":
+                if meas_thickness is not None:
+                    tool_input["current_thickness_mm"] = meas_thickness
+                    evidence_authoritative = True
+                    field_provenance["current_thickness_mm"] = ev.get("current_thickness_source", "ENGINEERING_EVIDENCE")
+
+                if ev.get("nominal_thickness_mm") is not None:
+                    tool_input["previous_thickness_mm"] = float(ev["nominal_thickness_mm"])
+                    evidence_authoritative = True
+                    field_provenance["previous_thickness_mm"] = ev.get("nominal_thickness_source", "ENGINEERING_EVIDENCE")
+
+                if ev.get("elapsed_time_years") is not None:
+                    tool_input["elapsed_time_years"] = float(ev["elapsed_time_years"])
+                    evidence_authoritative = True
+                    field_provenance["elapsed_time_years"] = ev.get("elapsed_time_source", "ENGINEERING_EVIDENCE")
+
+                if ev.get("minimum_required_thickness_mm") is not None:
+                    tool_input["minimum_required_mm"] = float(ev["minimum_required_thickness_mm"])
+                    evidence_authoritative = True
+                    field_provenance["minimum_required_mm"] = ev.get("minimum_thickness_source", "ENGINEERING_EVIDENCE")
+
+                if ev.get("equipment_id") and "component_id" not in tool_input:
+                    tool_input["component_id"] = str(ev["equipment_id"])
 
         req = ToolExecutionRequest(
             tool_name=tool_name,
@@ -190,7 +254,15 @@ class SandboxedCalculationTool(AgentTool):
             raise ToolExecutionError(
                 f"Sandboxed tool '{tool_name}' failed with status {res.status.value}: {res.error_message}"
             )
-        return res.structured_result or {}
+
+        output = dict(res.structured_result or {})
+        if evidence_authoritative:
+            output["evidence_authoritative"] = True
+            output["evidence_source"] = evidence_source
+            output["evidence_sha256"] = evidence_sha256
+            output["field_provenance"] = field_provenance
+
+        return output
 
 
 class ToolRegistry:
@@ -198,9 +270,10 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: Dict[str, AgentTool] = {}
-        # Register core standard tools
+        # Register core standard tools including Phase 8 SandboxedCalculationTool
         self.register(RAGRetrievalTool())
         self.register(MockCalculationTool())
+        self.register(SandboxedCalculationTool())
 
     def register(self, tool: AgentTool) -> None:
         self._tools[tool.name] = tool

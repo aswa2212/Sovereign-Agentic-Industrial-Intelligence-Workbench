@@ -15,8 +15,12 @@ from fastapi.testclient import TestClient
 try:
     from app.core.config import get_settings
     from app.main import app
-    from app.services.agent.models import AgentContext
-    from app.services.agent.tools import SandboxedCalculationTool
+    from app.services.agent.base import AgentState, ToolExecutionError
+    from app.services.agent.models import AgentContext, Plan, PlanStep, StepObservation
+    from app.services.agent.orchestrator import AgentStateMachineOrchestrator
+    from app.services.agent.planner import Planner
+    from app.services.agent.tools import SandboxedCalculationTool, ToolRegistry
+    from app.services.ingestion.evidence import EngineeringEvidence
     from app.services.sandbox.base import (
         ExecutionStatus,
         PolicyViolationError,
@@ -37,8 +41,12 @@ try:
 except ImportError:
     from backend.app.core.config import get_settings
     from backend.app.main import app
-    from backend.app.services.agent.models import AgentContext
-    from backend.app.services.agent.tools import SandboxedCalculationTool
+    from backend.app.services.agent.base import AgentState, ToolExecutionError
+    from backend.app.services.agent.models import AgentContext, Plan, PlanStep, StepObservation
+    from backend.app.services.agent.orchestrator import AgentStateMachineOrchestrator
+    from backend.app.services.agent.planner import Planner
+    from backend.app.services.agent.tools import SandboxedCalculationTool, ToolRegistry
+    from backend.app.services.ingestion.evidence import EngineeringEvidence
     from backend.app.services.sandbox.base import (
         ExecutionStatus,
         PolicyViolationError,
@@ -448,3 +456,301 @@ class TestSandboxAPI:
         data = res.json()
         assert data["error"]["code"] in ("UNPROCESSABLE_ENTITY", "HTTP_422")
         assert "VALIDATION_FAILED" in data["error"]["message"] or "strictly positive" in data["error"]["message"]
+
+
+# ── 8. EngineeringEvidence Authority Tests ────────────────────────────────────
+
+class TestEngineeringEvidenceAuthority:
+    """Verifies that context.evidence remains authoritative over payload/prompt values."""
+
+    @pytest.mark.anyio
+    async def test_conflicting_payload_measurement_evidence_wins(self):
+        """Prompt/payload passes 99.9mm (PASS), but authoritative evidence is 3.0mm (RETIRE). Evidence must win."""
+        tool = SandboxedCalculationTool()
+        evidence_dict = {
+            "source_filename": "UT_Report_V101.pdf",
+            "source_sha256": "abcdef1234567890",
+            "current_thickness_mm": 3.0,
+            "current_thickness_source": "DOCUMENT_TABLE_ROW_4",
+            "minimum_required_thickness_mm": 3.2,
+            "minimum_thickness_source": "API_570_TABLE_4",
+        }
+        ctx = AgentContext(
+            task_id="ev_auth_task",
+            user_request="Verify thickness",
+            evidence=evidence_dict,
+        )
+
+        out = await tool.execute(
+            {
+                "tool_name": "minimum_wall_thickness_check",
+                "measured_thickness_mm": 99.9,  # Conflicting payload
+                "minimum_required_mm": 1.0,     # Conflicting minimum
+                "execution_mode": "in_process",
+            },
+            ctx,
+        )
+
+        # Authoritative evidence must win: 3.0 - 3.2 = -0.2 (RETIRE)
+        assert out["margin_mm"] == -0.2
+        assert out["status"] == "RETIRE"
+        assert out["is_acceptable"] is False
+        assert out["evidence_authoritative"] is True
+        assert out["evidence_source"] == "UT_Report_V101.pdf"
+        assert out["evidence_sha256"] == "abcdef1234567890"
+        assert out["field_provenance"]["measured_thickness_mm"] == "DOCUMENT_TABLE_ROW_4"
+        assert out["field_provenance"]["minimum_required_mm"] == "API_570_TABLE_4"
+
+    @pytest.mark.anyio
+    async def test_corrosion_rate_with_evidence_authority(self):
+        """Authoritative evidence fields override corrosion rate calculation inputs."""
+        tool = SandboxedCalculationTool()
+        evidence_dict = {
+            "source_filename": "Piping_UT_Record.pdf",
+            "source_sha256": "deadbeef98765432",
+            "current_thickness_mm": 8.0,
+            "current_thickness_source": "INSPECTION_TABLE",
+            "nominal_thickness_mm": 10.0,
+            "nominal_thickness_source": "DESIGN_SPEC_P101",
+            "elapsed_time_years": 4.0,
+            "elapsed_time_source": "OPERATING_LOGS",
+            "minimum_required_thickness_mm": 4.0,
+            "minimum_thickness_source": "CORROSION_ALLOWANCE_TABLE",
+        }
+        ctx = AgentContext(
+            task_id="ev_corrosion_task",
+            user_request="Calculate corrosion rate",
+            evidence=evidence_dict,
+        )
+
+        # Conflicting payload claiming zero loss over 100 years
+        out = await tool.execute(
+            {
+                "tool_name": "corrosion_rate_calc",
+                "previous_thickness_mm": 50.0,
+                "current_thickness_mm": 50.0,
+                "elapsed_time_years": 100.0,
+                "minimum_required_mm": 1.0,
+                "execution_mode": "in_process",
+            },
+            ctx,
+        )
+
+        # Evidence values: metal_loss = 10.0 - 8.0 = 2.0; rate = 2.0 / 4.0 = 0.5 mm/yr; remaining = (8.0 - 4.0) / 0.5 = 8.0 yrs
+        assert out["metal_loss_mm"] == 2.0
+        assert out["corrosion_rate_mm_per_year"] == 0.5
+        assert out["remaining_life_years"] == 8.0
+        assert out["evidence_authoritative"] is True
+        assert out["field_provenance"]["current_thickness_mm"] == "INSPECTION_TABLE"
+        assert out["field_provenance"]["previous_thickness_mm"] == "DESIGN_SPEC_P101"
+        assert out["field_provenance"]["elapsed_time_years"] == "OPERATING_LOGS"
+        assert out["field_provenance"]["minimum_required_mm"] == "CORROSION_ALLOWANCE_TABLE"
+
+    @pytest.mark.anyio
+    async def test_engineering_evidence_pydantic_model_supported(self):
+        """Verifies that EngineeringEvidence Pydantic model is dumped and handled seamlessly."""
+        tool = SandboxedCalculationTool()
+        evidence_model = EngineeringEvidence(
+            equipment_id="V-102",
+            source_filename="V102_Report.pdf",
+            source_sha256="1122334455667788",
+            current_thickness_mm=5.5,
+            current_thickness_source="TABLE_4",
+            minimum_required_thickness_mm=3.5,
+            minimum_thickness_source="CODE_MIN",
+        )
+        ctx = AgentContext(
+            task_id="model_ev_task",
+            user_request="Check V-102",
+            evidence=evidence_model.model_dump(),
+        )
+
+        out = await tool.execute(
+            {
+                "tool_name": "minimum_wall_thickness_check",
+                "measured_thickness_mm": 9.9,
+                "minimum_required_mm": 1.0,
+                "execution_mode": "in_process",
+            },
+            ctx,
+        )
+        assert out["margin_mm"] == 2.0
+        assert out["status"] == "PASS"
+        assert out["evidence_authoritative"] is True
+        assert out["field_provenance"]["measured_thickness_mm"] == "TABLE_4"
+        assert out["field_provenance"]["minimum_required_mm"] == "CODE_MIN"
+
+    @pytest.mark.anyio
+    async def test_missing_required_evidence_fails_closed(self):
+        """Missing required thickness fields with no evidence and empty payload fails closed without fallback."""
+        tool = SandboxedCalculationTool()
+        ctx = AgentContext(task_id="missing_task", user_request="Empty test", evidence=None)
+
+        with pytest.raises(ToolExecutionError) as exc_info:
+            await tool.execute(
+                {
+                    "tool_name": "minimum_wall_thickness_check",
+                    "execution_mode": "in_process",
+                },
+                ctx,
+            )
+        assert "VALIDATION_FAILED" in str(exc_info.value) or "failed" in str(exc_info.value).lower()
+
+
+# ── 9. Phase 7 Agent State Machine Integration Tests ─────────────────────────
+
+class TestPhase7AgentStateMachineIntegration:
+    """Verifies end-to-end integration between Phase 7 Agent State Machine and SandboxedCalculationTool."""
+
+    def test_tool_registry_contains_sandboxed_calculation(self):
+        registry = ToolRegistry()
+        tool = registry.get_tool("sandboxed_calculation")
+        assert tool is not None
+        assert isinstance(tool, SandboxedCalculationTool)
+        assert tool.name == "sandboxed_calculation"
+        assert tool.capability == "sandboxed_calculation"
+
+    @pytest.mark.anyio
+    async def test_agent_state_machine_dispatches_sandboxed_calculation(self):
+        """Agent State Machine executes sandboxed_calculation step via ToolRegistry and captures observation."""
+        registry = ToolRegistry()
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=registry)
+
+        class SingleStepSandboxPlanner(Planner):
+            async def create_plan(self, task, task_id, routing_decision=None):
+                return Plan(
+                    plan_id="p_sandbox_test",
+                    task_id=task_id,
+                    goal=task,
+                    steps=[
+                        PlanStep(
+                            id="step_1",
+                            description="Run sandboxed wall thickness evaluation",
+                            capability="sandboxed_calculation",
+                            tool_name="sandboxed_calculation",
+                            input_payload={
+                                "tool_name": "minimum_wall_thickness_check",
+                                "measured_thickness_mm": 5.2,
+                                "minimum_required_mm": 3.2,
+                                "execution_mode": "in_process",
+                            },
+                        )
+                    ],
+                )
+
+        orchestrator.planner = SingleStepSandboxPlanner()
+        ctx = await orchestrator.execute_task("Run sandboxed calculation")
+
+        assert ctx.current_state == AgentState.DELIVER
+        assert len(ctx.observations) == 1
+        obs = ctx.observations[0]
+        assert obs.success is True
+        assert obs.tool_name == "sandboxed_calculation"
+        assert obs.output["margin_mm"] == 2.0
+        assert obs.output["status"] == "PASS"
+        assert ctx.tool_results["step_1"]["margin_mm"] == 2.0
+
+    @pytest.mark.anyio
+    async def test_agent_state_machine_handles_sandboxed_calculation_failure(self):
+        """When sandboxed calculation fails validation, failure observation is recorded and reaches failure machinery."""
+        registry = ToolRegistry()
+        orchestrator = AgentStateMachineOrchestrator(tool_registry=registry)
+
+        class FailingSandboxPlanner(Planner):
+            async def create_plan(self, task, task_id, routing_decision=None):
+                return Plan(
+                    plan_id="p_sandbox_fail",
+                    task_id=task_id,
+                    goal=task,
+                    steps=[
+                        PlanStep(
+                            id="step_1",
+                            description="Run invalid sandboxed calculation",
+                            capability="sandboxed_calculation",
+                            tool_name="sandboxed_calculation",
+                            input_payload={
+                                "tool_name": "minimum_wall_thickness_check",
+                                "measured_thickness_mm": -1.0,
+                                "minimum_required_mm": 3.2,
+                                "execution_mode": "in_process",
+                            },
+                        )
+                    ],
+                )
+
+        orchestrator.planner = FailingSandboxPlanner()
+        ctx = await orchestrator.execute_task("Run invalid calculation")
+
+        # Terminal state must be FAILED after reflector retries fail
+        assert ctx.current_state == AgentState.FAILED
+        assert any(not obs.success for obs in ctx.observations)
+        failed_obs = [obs for obs in ctx.observations if not obs.success]
+        assert "Sandboxed tool 'minimum_wall_thickness_check' failed" in failed_obs[0].error
+
+
+# ── 10. Compatibility Re-export Modules & Security Guarantees ─────────────────
+
+class TestCompatibilityModulesAndSecurityGuarantees:
+    """Verifies thin re-export compatibility modules and core security guarantees."""
+
+    def test_compatibility_process_runner_reexports(self):
+        try:
+            from app.services.sandbox.process_runner import (
+                SubprocessSandboxExecutor as RunnerExec,
+                ExecutionStatus as RunnerStatus,
+                ToolExecutionRequest as RunnerReq,
+            )
+        except ImportError:
+            from backend.app.services.sandbox.process_runner import (
+                SubprocessSandboxExecutor as RunnerExec,
+                ExecutionStatus as RunnerStatus,
+                ToolExecutionRequest as RunnerReq,
+            )
+        assert RunnerExec is SubprocessSandboxExecutor
+        assert RunnerStatus is ExecutionStatus
+
+    def test_compatibility_validator_reexports(self):
+        try:
+            from app.services.sandbox.validator import (
+                PythonASTPreScreener as ValScreener,
+                validate_tool_payload as val_payload,
+                FORBIDDEN_CALLS,
+                FORBIDDEN_MODULES,
+            )
+        except ImportError:
+            from backend.app.services.sandbox.validator import (
+                PythonASTPreScreener as ValScreener,
+                validate_tool_payload as val_payload,
+                FORBIDDEN_CALLS,
+                FORBIDDEN_MODULES,
+            )
+        assert ValScreener is PythonASTPreScreener
+        assert "os" in FORBIDDEN_MODULES
+        assert "eval" in FORBIDDEN_CALLS
+
+    @pytest.mark.anyio
+    async def test_command_injection_attempt_rejected(self, tmp_path):
+        """Payload values containing shell metacharacters cannot execute arbitrary commands."""
+        policy = SandboxPolicy(scratch_dir=tmp_path)
+        executor = SubprocessSandboxExecutor(policy=policy)
+
+        req = ToolExecutionRequest(
+            tool_name="minimum_wall_thickness_check",
+            input={
+                "component_id": "C-101; rm -rf /; echo injected",
+                "measured_thickness_mm": 4.5,
+                "minimum_required_mm": 3.2,
+            },
+            execution_mode="subprocess",
+        )
+        res = await executor.execute_tool(req)
+        assert res.status == ExecutionStatus.SUCCESS
+        assert res.structured_result["component_id"] == "C-101; rm -rf /; echo injected"
+
+    def test_subprocess_executor_shell_false_contract(self):
+        """SubprocessSandboxExecutor must invoke create_subprocess_exec with explicit args, never shell=True."""
+        import inspect
+        source = inspect.getsource(SubprocessSandboxExecutor)
+        assert "create_subprocess_exec" in source
+        assert "create_subprocess_shell" not in source
+        assert "shell=True" not in source
