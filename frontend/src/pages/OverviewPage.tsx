@@ -26,7 +26,7 @@ import { CopyableMono } from '../components/CopyableMono';
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { sovereignty, activeModel, tierConfig, loading: sovLoading } = useSovereignty(10000);
+  const { sovereignty, network, activeModel, tierConfig, loading: sovLoading } = useSovereignty(10000);
 
   const [recentEvents, setRecentEvents] = useState<AuditEvent[]>([]);
   const [deliverables, setDeliverables] = useState<GeneratedArtifact[]>([]);
@@ -63,7 +63,10 @@ export const OverviewPage: React.FC = () => {
     return () => { isMounted = false; };
   }, []);
 
-  const foreignSockets = sovereignty?.foreign_sockets_count ?? 0;
+  const foreignSockets = network?.non_loopback_connections
+    ?? sovereignty?.network_observation?.non_loopback_connections
+    ?? sovereignty?.foreign_sockets_count
+    ?? 0;
   const isAirGapped = sovereignty?.status === 'PASS' && foreignSockets === 0;
 
   return (
