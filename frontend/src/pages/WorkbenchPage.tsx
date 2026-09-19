@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAgentTask } from '../hooks/useAgentTask';
 import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
 import { AgentGraphTrace } from '../components/AgentGraphTrace';
@@ -21,6 +22,9 @@ import {
   Sliders,
   ShieldCheck,
   Terminal,
+  Maximize2,
+  X,
+  FileText,
 } from 'lucide-react';
 
 const PRESET_TASKS = [
@@ -70,6 +74,8 @@ export const WorkbenchPage: React.FC = () => {
   const [executionMode, setExecutionMode] = useState<'deterministic' | 'live'>('deterministic');
   const [configuredProvider, setConfiguredProvider] = useState<string>('Ollama');
   const [artifacts, setArtifacts] = useState<GeneratedArtifact[]>([]);
+
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
 
   // Strict task isolation: only render deliverables belonging to the current task_id
   const currentArtifacts = deliverables.filter((d) => !taskId || d.task_id === taskId);
@@ -132,10 +138,14 @@ export const WorkbenchPage: React.FC = () => {
       if (e.key === 'Enter' && (!isTextarea || e.ctrlKey || e.metaKey)) {
         if (!isRunning && taskInput.trim()) {
           e.preventDefault();
+          setIsPromptExpanded(false);
           handleStartTask();
         }
       } else if (e.key === 'Escape') {
-        if (isRunning) {
+        if (isPromptExpanded) {
+          e.preventDefault();
+          setIsPromptExpanded(false);
+        } else if (isRunning) {
           e.preventDefault();
           reset();
           toast.warning('Task Cancelled', 'Agent execution was stopped by user.');
@@ -145,7 +155,7 @@ export const WorkbenchPage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleStartTask, isRunning, taskInput, reset, toast]);
+  }, [handleStartTask, isRunning, taskInput, reset, toast, isPromptExpanded]);
 
   const handleSelectPreset = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = Number(e.target.value);
@@ -177,159 +187,212 @@ export const WorkbenchPage: React.FC = () => {
     });
   };
 
-  return (
-    <div className="page-container workbench-page">
-      {/* Top Engineering Control Bar */}
-      <section className="workbench-control-bar" aria-label="Workbench Task Controls">
-        <div className="control-bar-top-row">
-          <div className="preset-selector-group">
-            <span className="control-label">TASK PRESET:</span>
-            <select
-              className="form-select preset-select"
-              onChange={handleSelectPreset}
-              disabled={isRunning}
-              defaultValue="0"
-            >
-              {PRESET_TASKS.map((preset, index) => (
-                <option key={index} value={index}>
-                  {preset.title}
-                </option>
-              ))}
-            </select>
-          </div>
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
 
-          <div className="control-bar-settings-group">
-            <div className="mode-toggle-pill">
-              <span className="control-label">MODE:</span>
-              <button
-                type="button"
-                className={`mode-btn ${executionMode === 'deterministic' ? 'is-active' : ''}`}
-                onClick={() => setExecutionMode('deterministic')}
+  useEffect(() => {
+    // Locate the persistent top command slot in SovereigntyBar
+    setSlot(document.getElementById('workbench-command-slot'));
+  }, []);
+
+  const handleResetAll = useCallback(() => {
+    reset();
+    setArtifacts([]);
+    setSelectedFile(null);
+    setSelectedDoc(null);
+    setDocuments([]);
+    setSelectedEquipmentId(PRESET_TASKS[0].equipmentId);
+  }, [reset]);
+
+  const commandBarElement = (
+    <div className="unified-command-deck" role="toolbar" aria-label="Workbench Unified Command Bar">
+      <div className="cmd-preset-wrapper" title="Select Operational Goal Preset">
+        <select
+          className="cmd-preset-select"
+          onChange={handleSelectPreset}
+          disabled={isRunning}
+          defaultValue="0"
+          aria-label="Preset Engineering Scenario"
+        >
+          {PRESET_TASKS.map((preset, index) => (
+            <option key={index} value={index}>
+              {preset.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="cmd-input-container">
+        <input
+          type="text"
+          className="cmd-task-input"
+          value={taskInput}
+          onChange={(e) => setTaskInput(e.target.value)}
+          disabled={isRunning}
+          placeholder="Refinery objective or inspection query... (↵ Execute, Click ⤢ to expand)"
+          aria-label="Operational Goal or Inspection Query"
+        />
+
+        {taskInput.length > 60 && (
+          <span className="cmd-char-count" title={`${taskInput.length} characters in objective`}>
+            {taskInput.length}c
+          </span>
+        )}
+
+        <button
+          type="button"
+          className={`cmd-expand-btn ${isPromptExpanded ? 'is-active' : ''}`}
+          onClick={() => setIsPromptExpanded((prev) => !prev)}
+          title={isPromptExpanded ? 'Close prompt editor (Esc)' : 'Expand full multi-line prompt editor'}
+          aria-label="Expand multi-line prompt editor"
+          disabled={isRunning}
+        >
+          <Maximize2 size={12} />
+        </button>
+
+        {/* Floating Multi-Line Objective Popover (<= 56px collapsed bar preserved) */}
+        {isPromptExpanded && (
+          <div className="cmd-prompt-popover" role="dialog" aria-label="Operational Objective Multi-Line Editor">
+            <div className="prompt-popover-header">
+              <div className="popover-header-left">
+                <FileText size={13} className="accent-icon" />
+                <span className="popover-title">OPERATIONAL OBJECTIVE &amp; GOAL EDITOR</span>
+                <span className="popover-char-badge">{taskInput.length} characters</span>
+              </div>
+              <div className="popover-header-right">
+                <span className="popover-hint"><kbd className="cmd-kbd">Ctrl+↵</kbd> Execute</span>
+                <span className="popover-hint"><kbd className="cmd-kbd">Esc</kbd> Close</span>
+                <button
+                  type="button"
+                  className="popover-close-btn"
+                  onClick={() => setIsPromptExpanded(false)}
+                  aria-label="Close Popover"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+            <div className="prompt-popover-body">
+              <textarea
+                className="prompt-popover-textarea"
+                rows={5}
+                value={taskInput}
+                onChange={(e) => setTaskInput(e.target.value)}
                 disabled={isRunning}
-                title="Source: Deterministic demonstration pipeline (clean-room calculation & compilers)"
-              >
-                Demo Pipeline
-              </button>
-              <button
-                type="button"
-                className={`mode-btn ${executionMode === 'live' ? 'is-active' : ''}`}
-                onClick={() => setExecutionMode('live')}
-                disabled={isRunning}
-                title="Source: FastAPI + local Ollama"
-              >
-                Live Local Model
-              </button>
-              <DataSourceBadge
-                source={executionMode === 'live' ? 'LIVE' : 'DEMO'}
-                label={executionMode === 'live' ? 'LIVE — LOCAL OLLAMA' : 'DEMO — DETERMINISTIC'}
-                size="sm"
+                placeholder="Enter complete industrial engineering objective, standards to enforce, or inspection parameters..."
+                autoFocus
               />
             </div>
-
-            <div className="steps-selector-group">
-              <span className="control-label">STEPS:</span>
-              <select
-                className="form-select steps-select"
-                value={maxSteps}
-                onChange={(e) => setMaxSteps(Number(e.target.value))}
-                disabled={isRunning}
-              >
-                <option value={4}>4</option>
-                <option value={8}>8</option>
-                <option value={12}>12</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                reset();
-                setArtifacts([]);
-                setSelectedFile(null);
-                setSelectedDoc(null);
-                setDocuments([]);
-                setSelectedEquipmentId(PRESET_TASKS[0].equipmentId);
-              }}
-              disabled={isRunning}
-              title="Reset workbench state"
-            >
-              <RotateCcw size={13} />
-              <span>Reset</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-accent btn-sm run-task-btn"
-              onClick={handleStartTask}
-              disabled={isRunning || !taskInput.trim()}
-            >
-              {isRunning ? (
-                <>
-                  <Clock size={14} className="icon-spin" />
-                  <span>Executing Pipeline...</span>
-                </>
-              ) : (
-                <>
-                  <Play size={14} fill="currentColor" />
-                  <span>Execute Analysis</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Task Objective Text Input Area */}
-        <div className="task-input-wrapper">
-          <textarea
-            className="task-objective-textarea"
-            rows={2}
-            value={taskInput}
-            onChange={(e) => setTaskInput(e.target.value)}
-            disabled={isRunning}
-            placeholder="Enter refinery operational goal or inspection question..."
-          />
-        </div>
-
-        {/* Surfaced Keyboard Shortcut Hints Row */}
-        <div className="workbench-shortcuts-hint-row">
-          <span className="shortcut-hint">
-            <kbd className="cmd-kbd">↵ Enter</kbd> (or <kbd className="cmd-kbd">Ctrl+Enter</kbd>) to Execute
-          </span>
-          <span className="hint-sep">•</span>
-          <span className="shortcut-hint">
-            <kbd className="cmd-kbd">Esc</kbd> to Cancel / Reset
-          </span>
-          <span className="hint-sep">•</span>
-          <span className="shortcut-hint">
-            <kbd className="cmd-kbd">⌘K</kbd> Command Palette
-          </span>
-        </div>
-
-        {/* Live Local Model Accent-Glow Banner */}
-        {executionMode === 'live' && (
-          <div className="live-local-banner-glow">
-            <div className="banner-left">
-              <span className="live-glow-dot" />
-              <strong className="live-banner-title">LIVE LOCAL MODEL ACTIVE</strong>
-              <span className="banner-sep">|</span>
-              <span>Provider: <code>{configuredProvider}</code></span>
-              <span className="banner-sep">|</span>
-              <span>Model Tag: <code>{activeModel}</code></span>
-            </div>
-            <div className="banner-right">
-              <code>127.0.0.1 (On-Prem Loopback Sovereign)</code>
+            <div className="prompt-popover-footer">
+              <span className="popover-footer-note">
+                API 570 / ASME B31.3 deterministic compliance enforcement active
+              </span>
+              <div className="popover-footer-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsPromptExpanded(false)}
+                >
+                  Done
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-accent btn-sm"
+                  onClick={() => {
+                    setIsPromptExpanded(false);
+                    handleStartTask();
+                  }}
+                  disabled={isRunning || !taskInput.trim()}
+                >
+                  <Play size={12} fill="currentColor" />
+                  <span>Execute Prompt</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
+      </div>
 
-        {errorMessage && (
-          <div className="workbench-error-banner">
-            <AlertTriangle size={14} />
-            <span>{errorMessage}</span>
-          </div>
+      <div
+        className="cmd-mode-pill"
+        title={`Mode: ${executionMode === 'live' ? 'Live Local Model (FastAPI + Ollama)' : 'Deterministic Demonstration Pipeline'}`}
+      >
+        <button
+          type="button"
+          className={`cmd-mode-btn ${executionMode === 'deterministic' ? 'is-active' : ''}`}
+          onClick={() => setExecutionMode('deterministic')}
+          disabled={isRunning}
+        >
+          DEMO
+        </button>
+        <button
+          type="button"
+          className={`cmd-mode-btn ${executionMode === 'live' ? 'is-active' : ''}`}
+          onClick={() => setExecutionMode('live')}
+          disabled={isRunning}
+        >
+          LIVE
+        </button>
+      </div>
+
+      <div className="cmd-steps-wrap" title="Max Agent Exploration Steps">
+        <select
+          className="cmd-steps-select"
+          value={maxSteps}
+          onChange={(e) => setMaxSteps(Number(e.target.value))}
+          disabled={isRunning}
+          aria-label="Agent Steps Limit"
+        >
+          <option value={4}>4s</option>
+          <option value={8}>8s</option>
+          <option value={12}>12s</option>
+        </select>
+      </div>
+
+      <button
+        type="button"
+        className="cmd-btn-reset"
+        onClick={handleResetAll}
+        disabled={isRunning}
+        title="Reset workbench state (Esc)"
+        aria-label="Reset State"
+      >
+        <RotateCcw size={13} />
+      </button>
+
+      <button
+        type="button"
+        className={`cmd-btn-execute ${isRunning ? 'is-running' : ''}`}
+        onClick={handleStartTask}
+        disabled={isRunning || !taskInput.trim()}
+        aria-label={isRunning ? 'Executing Pipeline...' : 'Execute Analysis'}
+      >
+        {isRunning ? (
+          <>
+            <Clock size={13} className="icon-spin" />
+            <span>Executing...</span>
+          </>
+        ) : (
+          <>
+            <Play size={13} fill="currentColor" />
+            <span>Execute</span>
+          </>
         )}
-      </section>
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="page-container workbench-page">
+      {/* 1. Mount Unified Command Bar into Top Persistent Header (or inline fallback if slot pending) */}
+      {slot ? createPortal(commandBarElement, slot) : commandBarElement}
+
+      {/* 2. Slim Alert Banner (Rendered only on error) */}
+      {errorMessage && (
+        <div className="workbench-error-banner" role="alert">
+          <AlertTriangle size={14} />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       {/* NON-NEGOTIABLE 3-COLUMN ENGINEERING LAYOUT */}
       <div className="workbench-three-columns-grid">

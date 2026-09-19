@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { ShieldCheck, ShieldAlert, RefreshCw, Sliders, Terminal, Cpu } from 'lucide-react';
 import { useSovereignty } from '../hooks/useSovereignty';
 import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
@@ -18,6 +19,8 @@ export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({
 }) => {
   const { sovereignty, physicalAttestation, activeModel: sovereigntyModel, loading, refresh, isPolling } = useSovereignty(10000);
   const { runtimeState, activeModel: workbenchModel } = useWorkbenchRuntime();
+  const location = useLocation();
+  const isWorkbench = location.pathname === '/workbench';
 
   // The active model represents the model actually allocated/used by current execution or routed preview
   const displayModel = runtimeState.activeModel || runtimeState.routedModel || sovereigntyModel || 'MODEL UNAVAILABLE';
@@ -41,19 +44,21 @@ export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({
         </div>
       </div>
 
-      {/* Center / Command Palette Hint */}
-      <div className="status-strip-center">
-        <button
-          type="button"
-          className="status-cmd-shortcut"
-          onClick={onOpenCommandPalette}
-          title="Open Command Palette (Cmd/Ctrl + K)"
-          aria-label="Open Command Palette"
-        >
-          <Terminal size={13} className="shortcut-icon" />
-          <span className="shortcut-text">Quick Launch &amp; Jump</span>
-          <kbd className="cmd-kbd">⌘K</kbd>
-        </button>
+      {/* Center Unified Command Deck Slot */}
+      <div className="status-strip-center" id="workbench-command-slot">
+        {!isWorkbench && (
+          <button
+            type="button"
+            className="status-cmd-shortcut"
+            onClick={onOpenCommandPalette}
+            title="Open Command Palette (Cmd/Ctrl + K)"
+            aria-label="Open Command Palette"
+          >
+            <Terminal size={13} className="shortcut-icon" />
+            <span className="shortcut-text">Quick Launch &amp; Jump</span>
+            <kbd className="cmd-kbd">⌘K</kbd>
+          </button>
+        )}
       </div>
 
       {/* Right Controls & Sovereignty Proofs */}

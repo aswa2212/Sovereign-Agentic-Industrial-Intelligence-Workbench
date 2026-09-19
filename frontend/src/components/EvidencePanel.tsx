@@ -18,6 +18,7 @@ import {
   Eye,
   AlertTriangle,
   AlertCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { ValidationGateFuseBox } from './ValidationGateFuseBox';
 import { DataSourceBadge } from './DataSourceBadge';
@@ -43,6 +44,7 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
   isRunning = false,
   executionMode = 'deterministic',
 }) => {
+  const [activeTab, setActiveTab] = useState<'validation' | 'calculations' | 'ocr' | 'citations'>('validation');
   const [expandedChunk, setExpandedChunk] = useState<string | null>(
     citations.length > 0 ? (citations[0].chunk_id || 'chk-0') : null
   );
@@ -93,275 +95,232 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
         </div>
       </div>
 
-      <div className="panel-body-scroll">
-        {/* 1. Real-time Intent Routing Card (Evidence) */}
-        {routePreview && (
-          <div className="evidence-card route-evidence-card">
+      {/* Real-time Intent Routing Mini-Banner (if available) */}
+      {routePreview && (
+        <div className="route-evidence-mini-strip" title={routePreview.reason || 'Task Intent Routing Decision'}>
+          <div className="route-mini-left">
+            <Cpu size={12} className="accent-icon" />
+            <span className="route-mini-label">ROUTED:</span>
+            <code className="route-mini-code">{routePreview.task_type || 'corrosion_audit'}</code>
+            <span className="route-mini-sep">•</span>
+            <span className="route-mini-text">{routePreview.capability || 'engineering_math'}</span>
+            <span className="route-mini-sep">•</span>
+            <span className="route-mini-role">{routePreview.model_role || 'reasoning'}</span>
+          </div>
+          <span className="badge-pill badge-neutral">
+            {Math.round((routePreview.confidence ?? 0.98) * 100)}% CONF
+          </span>
+        </div>
+      )}
+
+      {/* CONDITION 1: Persistent Executive Summary (Visible without tab click) */}
+      <div className="persistent-summary-card" id="executive-summary-card">
+        <div className="persistent-summary-header">
+          <div className="summary-header-left">
+            <FileText size={13} className="accent-icon" />
+            <span className="summary-header-title">EXECUTIVE ASSESSMENT SUMMARY</span>
+          </div>
+          <span className="summary-badge">AUTONOMOUS SYNTHESIS</span>
+        </div>
+        <div className="persistent-summary-content">
+          {summary && summary.trim() ? (
+            <p className="summary-paragraph">{summary}</p>
+          ) : (
+            <p className="summary-placeholder">Awaiting pipeline execution for autonomous engineering synthesis.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Evidence Subsystem Tabs Navigation */}
+      <div className="evidence-tabs-deck" role="tablist" aria-label="Evidence Subsystems">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'validation'}
+          className={`evidence-deck-tab ${activeTab === 'validation' ? 'is-active-tab' : ''}`}
+          onClick={() => setActiveTab('validation')}
+        >
+          <ShieldCheck size={13} />
+          <span>Validation Gate</span>
+          <span className="tab-pill-badge">
+            {validationReport ? `${validationReport.checks_passed_count}/12` : '12/12'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'calculations'}
+          className={`evidence-deck-tab ${activeTab === 'calculations' ? 'is-active-tab' : ''}`}
+          onClick={() => setActiveTab('calculations')}
+        >
+          <Calculator size={13} />
+          <span>Calculations</span>
+          <span className={`tab-pill-badge ${calculation ? (isSafe ? 'badge-safe' : 'badge-alert') : ''}`}>
+            {calculation
+              ? (calculation.corrosion_rate_mm_per_year !== undefined
+                  ? `${calculation.corrosion_rate_mm_per_year} mm/y`
+                  : 'API 570')
+              : 'API 570'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'ocr'}
+          className={`evidence-deck-tab ${activeTab === 'ocr' ? 'is-active-tab' : ''}`}
+          onClick={() => setActiveTab('ocr')}
+          disabled={!hasVisualFindings}
+          title={!hasVisualFindings ? 'No visual OCR findings for this task' : 'Inspect OCR/VLM visual findings'}
+        >
+          <Eye size={13} />
+          <span>Visual OCR</span>
+          <span className="tab-pill-badge">{ocrVisionSummary?.findings_count || 0}</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'citations'}
+          className={`evidence-deck-tab ${activeTab === 'citations' ? 'is-active-tab' : ''}`}
+          onClick={() => setActiveTab('citations')}
+        >
+          <BookOpen size={13} />
+          <span>Citations</span>
+          <span className="tab-pill-badge">{citations.length}</span>
+        </button>
+      </div>
+
+      {/* Active Tab Viewport */}
+      <div className="panel-body-scroll evidence-tab-viewport">
+        {/* TAB 1: Validation Gate (Fuse Box) */}
+        {activeTab === 'validation' && (
+          <div className="tab-pane-validation">
+            <ValidationGateFuseBox report={validationReport} isRunning={isRunning} />
+          </div>
+        )}
+
+        {/* TAB 2: Calculations & Engineering Assessment */}
+        {activeTab === 'calculations' && (
+          <div className="evidence-card calculation-assessment-card" id="calculation-assessment-card">
             <div className="evidence-card-header">
               <div className="card-header-left">
-                <Cpu size={14} className="accent-icon" />
-                <span className="card-heading">TASK INTENT ROUTER (LEVEL 0)</span>
+                <Calculator size={14} className="accent-icon" />
+                <span className="card-heading">ENGINEERING CALCULATION &amp; ASSESSMENT</span>
               </div>
-              <span className="badge-pill badge-neutral">
-                {Math.round((routePreview.confidence ?? 0.98) * 100)}% CONFIDENCE
-              </span>
+              {calculation ? (
+                <span
+                  className={`badge-pill ${
+                    isSafe
+                      ? 'badge-success'
+                      : isRetire
+                      ? 'badge-error'
+                      : isMonitor
+                      ? 'badge-warning'
+                      : 'badge-neutral'
+                  }`}
+                >
+                  {isSafe
+                    ? 'CONTINUE SERVICE'
+                    : isRetire
+                    ? 'RETIRE / CRITICAL'
+                    : isMonitor
+                    ? 'MONITOR SERVICE'
+                    : calculation.margin_check?.status || calculation.remaining_life_status || 'ASSESSED'}
+                </span>
+              ) : (
+                <span className="badge-pill badge-neutral">
+                  {isRunning ? 'CALCULATING...' : '—'}
+                </span>
+              )}
             </div>
 
-            <div className="route-attributes-grid">
-              <div className="route-attr">
-                <span className="attr-label">TASK TYPE:</span>
-                <code className="attr-value">{routePreview.task_type || 'corrosion_audit'}</code>
+            <div className="calc-metrics-grid">
+              {/* Corrosion Rate */}
+              <div className="calc-metric-cell cell-highlight">
+                <span className="calc-metric-label">CORROSION RATE</span>
+                <span className={`calc-metric-value ${calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null ? 'val-highlight' : 'val-muted'}`}>
+                  {calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null
+                    ? `${calculation.corrosion_rate_mm_per_year} mm/yr`
+                    : '—'}
+                </span>
+                <span className="calc-metric-sub">API 570 Short-Term</span>
               </div>
-              <div className="route-attr">
-                <span className="attr-label">TARGET CAPABILITY:</span>
-                <code className="attr-value">{routePreview.capability || 'engineering_math'}</code>
+
+              {/* Remaining Service Life */}
+              <div className={`calc-metric-cell ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'cell-safe' : 'cell-warning') : ''}`}>
+                <span className="calc-metric-label">REMAINING SERVICE LIFE</span>
+                <span className={`calc-metric-value ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'val-success' : 'val-warning') : 'val-muted'}`}>
+                  {calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null
+                    ? `${calculation.remaining_life_years} yrs`
+                    : (calculation ? 'UNAVAILABLE' : '—')}
+                </span>
+                <span className="calc-metric-sub">To t_min limit</span>
               </div>
-              <div className="route-attr">
-                <span className="attr-label">ALLOCATED ROLE:</span>
-                <code className="attr-value">{routePreview.model_role || 'reasoning'}</code>
+
+              {/* Total Metal Loss */}
+              <div className="calc-metric-cell">
+                <span className="calc-metric-label">TOTAL METAL LOSS</span>
+                <span className={`calc-metric-value ${calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null ? '' : 'val-muted'}`}>
+                  {calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null
+                    ? `${calculation.metal_loss_mm} mm`
+                    : '—'}
+                </span>
+                <span className="calc-metric-sub">t_nominal - t_actual</span>
+              </div>
+
+              {/* Structural Margin */}
+              <div className={`calc-metric-cell ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'cell-safe' : 'cell-critical') : ''}`}>
+                <span className="calc-metric-label">STRUCTURAL MARGIN</span>
+                <span className={`calc-metric-value ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'val-success' : 'val-critical') : 'val-muted'}`}>
+                  {calculation?.margin_check?.margin_mm !== undefined && calculation?.margin_check?.margin_mm !== null
+                    ? `${calculation.margin_check.margin_mm >= 0 ? '+' : ''}${calculation.margin_check.margin_mm} mm`
+                    : (calculation?.remaining_margin_mm !== undefined ? `${calculation.remaining_margin_mm} mm` : (calculation ? 'UNAVAILABLE' : '—'))}
+                </span>
+                <span className="calc-metric-sub">t_actual - t_required</span>
+              </div>
+
+              {/* Governing CML */}
+              <div className="calc-metric-cell">
+                <span className="calc-metric-label">GOVERNING CML</span>
+                <span className={`calc-metric-value ${calculation?.governing_cml || calculation?.component_id ? '' : 'val-muted'}`}>
+                  {calculation?.governing_cml || calculation?.component_id || (calculation ? 'UNAVAILABLE' : '—')}
+                </span>
+                <span className="calc-metric-sub">Critical inspection point</span>
+              </div>
+
+              {/* Assessment Status */}
+              <div className="calc-metric-cell">
+                <span className="calc-metric-label">ASSESSMENT STATUS</span>
+                <span className={`calc-metric-value ${
+                  isSafe
+                    ? 'val-success'
+                    : isRetire
+                    ? 'val-critical'
+                    : isMonitor
+                    ? 'val-warning'
+                    : 'val-muted'
+                }`}>
+                  {calculation?.margin_check?.status || calculation?.remaining_life_status || (calculation ? 'UNAVAILABLE' : '—')}
+                </span>
+                <span className="calc-metric-sub">Integrity disposition</span>
               </div>
             </div>
 
-            {routePreview.reason && (
-              <div className="route-reason-row">
-                <span className="reason-label">MATCHED RULE:</span>
-                <span className="reason-text">{routePreview.reason}</span>
+            {calculation && (
+              <div className="calc-details-footer">
+                <span>Formula: <code>{calculation.formula_used || 'API 570: Cr = (t_initial - t_actual) / Δt'}</code></span>
+                {calculation.previous_thickness_mm !== undefined && calculation.current_thickness_mm !== undefined && (
+                  <span>Baseline: <code>{calculation.previous_thickness_mm} mm → {calculation.current_thickness_mm} mm</code> ({calculation.elapsed_time_years ?? '—'} yrs)</span>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* 2. Sovereign RAG Citations Section (Evidence) */}
-        <div className="evidence-card rag-citations-card">
-          <div className="evidence-card-header">
-            <div className="card-header-left">
-              <FileText size={14} className="accent-icon" />
-              <span className="card-heading">SOVEREIGN RAG CITATIONS ({citations.length})</span>
-            </div>
-            <span className="subtle-note">Dense Vector Match (Nomic 768-d)</span>
-          </div>
-
-          {citations.length > 2 && (
-            <div className="citations-search-wrap">
-              <Search size={13} className="search-icon-pos" />
-              <input
-                type="text"
-                placeholder="Filter retrieved citations by keyword or section..."
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                className="citations-search-input"
-              />
-            </div>
-          )}
-
-          {citations.length === 0 ? (
-            <div className="empty-panel-state">
-              <BookOpen size={24} className="empty-icon" />
-              <div className="empty-title">No Citations Loaded Yet</div>
-              <div className="empty-desc">
-                Submit a task to trigger dense semantic retrieval over local MRPL standard operating procedures.
-              </div>
-            </div>
-          ) : (
-            <div className="citations-list">
-              {filtered.map((citation, index) => {
-                const chunkKey = citation.chunk_id || `chk-${index}`;
-                const isExpanded = expandedChunk === chunkKey;
-                const matchPct = citation.similarity_score
-                  ? Math.round(citation.similarity_score * 100)
-                  : null;
-
-                return (
-                  <div key={chunkKey} className={`citation-card ${isExpanded ? 'is-expanded' : ''}`}>
-                    <div
-                      className="citation-card-summary"
-                      onClick={() => setExpandedChunk(isExpanded ? null : chunkKey)}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="citation-summary-left">
-                        <span className="citation-provenance-ribbon">
-                          P.{citation.page_number}
-                        </span>
-                        <span className="citation-source-doc">{citation.source_document}</span>
-                      </div>
-
-                      <div className="citation-summary-right">
-                        {matchPct !== null && (
-                          <span className="citation-match-tag">{matchPct}% MATCH</span>
-                        )}
-                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="citation-card-detail">
-                        <div className="citation-meta-tags">
-                          <span><strong>Document:</strong> {citation.source_document}</span>
-                          <span><strong>Page:</strong> {citation.page_number}</span>
-                          {citation.chunk_id && (
-                            <span><strong>Chunk ID:</strong> <code>{citation.chunk_id}</code></span>
-                          )}
-                          {citation.similarity_score !== undefined && citation.similarity_score !== null && (
-                            <span><strong>Cosine Score:</strong> <code>{typeof citation.similarity_score === 'number' ? citation.similarity_score.toFixed(4) : citation.similarity_score}</code></span>
-                          )}
-                          <span className="badge-pill badge-success">
-                            <CheckCircle2 size={10} />
-                            <span>PROVENANCE: LOCAL ON-PREM CORPUS</span>
-                          </span>
-                        </div>
-                        <div className="citation-quote-box">
-                          &ldquo;{citation.text}&rdquo;
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* 3. Engineering Calculation & Assessment Card */}
-        <div className="evidence-card calculation-assessment-card" id="calculation-assessment-card">
-          <div className="evidence-card-header">
-            <div className="card-header-left">
-              <Calculator size={14} className="accent-icon" />
-              <span className="card-heading">ENGINEERING CALCULATION &amp; ASSESSMENT</span>
-            </div>
-            {calculation ? (
-              <span
-                className={`badge-pill ${
-                  isSafe
-                    ? 'badge-success'
-                    : isRetire
-                    ? 'badge-error'
-                    : isMonitor
-                    ? 'badge-warning'
-                    : 'badge-neutral'
-                }`}
-              >
-                {isSafe
-                  ? 'CONTINUE SERVICE'
-                  : isRetire
-                  ? 'RETIRE / CRITICAL'
-                  : isMonitor
-                  ? 'MONITOR SERVICE'
-                  : calculation.margin_check?.status || calculation.remaining_life_status || 'ASSESSED'}
-              </span>
-            ) : (
-              <span className="badge-pill badge-neutral">
-                {isRunning ? 'CALCULATING...' : '—'}
-              </span>
-            )}
-          </div>
-
-          <div className="calc-metrics-grid">
-            {/* Corrosion Rate */}
-            <div className="calc-metric-cell cell-highlight">
-              <span className="calc-metric-label">CORROSION RATE</span>
-              <span className={`calc-metric-value ${calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null ? 'val-highlight' : 'val-muted'}`}>
-                {calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null
-                  ? `${calculation.corrosion_rate_mm_per_year} mm/yr`
-                  : '—'}
-              </span>
-              <span className="calc-metric-sub">API 570 Short-Term</span>
-            </div>
-
-            {/* Remaining Service Life */}
-            <div className={`calc-metric-cell ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'cell-safe' : 'cell-warning') : ''}`}>
-              <span className="calc-metric-label">REMAINING SERVICE LIFE</span>
-              <span className={`calc-metric-value ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'val-success' : 'val-warning') : 'val-muted'}`}>
-                {calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null
-                  ? `${calculation.remaining_life_years} yrs`
-                  : (calculation ? 'UNAVAILABLE' : '—')}
-              </span>
-              <span className="calc-metric-sub">To t_min limit</span>
-            </div>
-
-            {/* Total Metal Loss */}
-            <div className="calc-metric-cell">
-              <span className="calc-metric-label">TOTAL METAL LOSS</span>
-              <span className={`calc-metric-value ${calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null ? '' : 'val-muted'}`}>
-                {calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null
-                  ? `${calculation.metal_loss_mm} mm`
-                  : '—'}
-              </span>
-              <span className="calc-metric-sub">t_nominal - t_actual</span>
-            </div>
-
-            {/* Structural Margin */}
-            <div className={`calc-metric-cell ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'cell-safe' : 'cell-critical') : ''}`}>
-              <span className="calc-metric-label">STRUCTURAL MARGIN</span>
-              <span className={`calc-metric-value ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'val-success' : 'val-critical') : 'val-muted'}`}>
-                {calculation?.margin_check?.margin_mm !== undefined && calculation?.margin_check?.margin_mm !== null
-                  ? `${calculation.margin_check.margin_mm >= 0 ? '+' : ''}${calculation.margin_check.margin_mm} mm`
-                  : (calculation?.remaining_margin_mm !== undefined ? `${calculation.remaining_margin_mm} mm` : (calculation ? 'UNAVAILABLE' : '—'))}
-              </span>
-              <span className="calc-metric-sub">t_actual - t_required</span>
-            </div>
-
-            {/* Governing CML */}
-            <div className="calc-metric-cell">
-              <span className="calc-metric-label">GOVERNING CML</span>
-              <span className={`calc-metric-value ${calculation?.governing_cml || calculation?.component_id ? '' : 'val-muted'}`}>
-                {calculation?.governing_cml || calculation?.component_id || (calculation ? 'UNAVAILABLE' : '—')}
-              </span>
-              <span className="calc-metric-sub">Critical inspection point</span>
-            </div>
-
-            {/* Assessment Status */}
-            <div className="calc-metric-cell">
-              <span className="calc-metric-label">ASSESSMENT STATUS</span>
-              <span className={`calc-metric-value ${
-                isSafe
-                  ? 'val-success'
-                  : isRetire
-                  ? 'val-critical'
-                  : isMonitor
-                  ? 'val-warning'
-                  : 'val-muted'
-              }`}>
-                {calculation?.margin_check?.status || calculation?.remaining_life_status || (calculation ? 'UNAVAILABLE' : '—')}
-              </span>
-              <span className="calc-metric-sub">Integrity disposition</span>
-            </div>
-          </div>
-
-          {calculation && (
-            <div className="calc-details-footer">
-              <span>Formula: <code>{calculation.formula_used || 'API 570: Cr = (t_initial - t_actual) / Δt'}</code></span>
-              {calculation.previous_thickness_mm !== undefined && calculation.current_thickness_mm !== undefined && (
-                <span>Baseline: <code>{calculation.previous_thickness_mm} mm → {calculation.current_thickness_mm} mm</code> ({calculation.elapsed_time_years ?? '—'} yrs)</span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* 4. Executive Summary Card */}
-        <div className="evidence-card executive-summary-card" id="executive-summary-card">
-          <div className="evidence-card-header">
-            <div className="card-header-left">
-              <FileText size={14} className="accent-icon" />
-              <span className="card-heading">EXECUTIVE SUMMARY</span>
-            </div>
-            <span className="subtle-note">Autonomous Engineering Synthesis</span>
-          </div>
-          <div className="executive-summary-body">
-            {summary && summary.trim() ? (
-              <div className="summary-text-block">
-                {summary}
-              </div>
-            ) : (
-              <div className="summary-unavailable-text">
-                SUMMARY UNAVAILABLE
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 5. Visual Findings Card (Omitted if no visual findings) */}
-        {hasVisualFindings && (
+        {/* TAB 3: Visual OCR / VLM Findings */}
+        {activeTab === 'ocr' && (
           <div className="evidence-card visual-findings-card" id="visual-findings-card">
             <div className="evidence-card-header">
               <div className="card-header-left">
@@ -413,8 +372,98 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
           </div>
         )}
 
-        {/* 6. 12-Cell Status Grid (Validation Gate Fuse Box) */}
-        <ValidationGateFuseBox report={validationReport} isRunning={isRunning} />
+        {/* TAB 4: Sovereign RAG Citations */}
+        {activeTab === 'citations' && (
+          <div className="evidence-card rag-citations-card">
+            <div className="evidence-card-header">
+              <div className="card-header-left">
+                <FileText size={14} className="accent-icon" />
+                <span className="card-heading">SOVEREIGN RAG CITATIONS ({citations.length})</span>
+              </div>
+              <span className="subtle-note">Dense Vector Match (Nomic 768-d)</span>
+            </div>
+
+            {citations.length > 2 && (
+              <div className="citations-search-wrap">
+                <Search size={13} className="search-icon-pos" />
+                <input
+                  type="text"
+                  placeholder="Filter retrieved citations by keyword or section..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="citations-search-input"
+                />
+              </div>
+            )}
+
+            {citations.length === 0 ? (
+              <div className="empty-panel-state">
+                <BookOpen size={24} className="empty-icon" />
+                <div className="empty-title">No Citations Loaded Yet</div>
+                <div className="empty-desc">
+                  Submit a task to trigger dense semantic retrieval over local MRPL standard operating procedures.
+                </div>
+              </div>
+            ) : (
+              <div className="citations-list">
+                {filtered.map((citation, index) => {
+                  const chunkKey = citation.chunk_id || `chk-${index}`;
+                  const isExpanded = expandedChunk === chunkKey;
+                  const matchPct = citation.similarity_score
+                    ? Math.round(citation.similarity_score * 100)
+                    : null;
+
+                  return (
+                    <div key={chunkKey} className={`citation-card ${isExpanded ? 'is-expanded' : ''}`}>
+                      <div
+                        className="citation-card-summary"
+                        onClick={() => setExpandedChunk(isExpanded ? null : chunkKey)}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="citation-summary-left">
+                          <span className="citation-provenance-ribbon">
+                            P.{citation.page_number}
+                          </span>
+                          <span className="citation-source-doc">{citation.source_document}</span>
+                        </div>
+
+                        <div className="citation-summary-right">
+                          {matchPct !== null && (
+                            <span className="citation-match-tag">{matchPct}% MATCH</span>
+                          )}
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="citation-card-detail">
+                          <div className="citation-meta-tags">
+                            <span><strong>Document:</strong> {citation.source_document}</span>
+                            <span><strong>Page:</strong> {citation.page_number}</span>
+                            {citation.chunk_id && (
+                              <span><strong>Chunk ID:</strong> <code>{citation.chunk_id}</code></span>
+                            )}
+                            {citation.similarity_score !== undefined && citation.similarity_score !== null && (
+                              <span><strong>Cosine Score:</strong> <code>{typeof citation.similarity_score === 'number' ? citation.similarity_score.toFixed(4) : citation.similarity_score}</code></span>
+                            )}
+                            <span className="badge-pill badge-success">
+                              <CheckCircle2 size={10} />
+                              <span>PROVENANCE: LOCAL ON-PREM CORPUS</span>
+                            </span>
+                          </div>
+                          <div className="citation-quote-box">
+                            &ldquo;{citation.text}&rdquo;
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
