@@ -122,6 +122,25 @@ export function useAgentTask() {
         document_summary: wfRes.document_summary,
       });
 
+      // Extract governing CML if present from evidence summary or calculation
+      const governingCml =
+        wfRes.calculation_result?.governing_cml ||
+        wfRes.evidence_summary?.selected_measurement?.cml_tag ||
+        wfRes.evidence_summary?.selected_measurement?.location_desc ||
+        wfRes.calculation_result?.component_id;
+
+      const calcWithCml = wfRes.calculation_result
+        ? {
+            ...wfRes.calculation_result,
+            governing_cml: governingCml,
+          }
+        : undefined;
+
+      const summaryText =
+        wfRes.summary ||
+        wfRes.ocr_vision_summary?.summary ||
+        (wfRes.status === 'COMPLETED' ? 'Completed autonomous engineering workflow execution.' : '');
+
       // Entirely replace state with the new response (do NOT merge with previous run)
       setState({
         isRunning: false,
@@ -133,11 +152,13 @@ export function useAgentTask() {
         result: {
           task: taskText,
           status: wfRes.status,
-          summary: wfRes.ocr_vision_summary?.summary || 'Completed autonomous engineering workflow execution.',
+          summary: summaryText,
           citations_count: mappedCitations.length,
           citations: mappedCitations,
-          calculation: wfRes.calculation_result,
+          calculation: calcWithCml,
           structured_validation: wfRes.validation_result,
+          ocr_vision_summary: wfRes.ocr_vision_summary,
+          governing_cml: governingCml,
         },
         citations: mappedCitations,
         executionMode: mode,

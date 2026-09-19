@@ -54,14 +54,51 @@ export interface WallThicknessMeasurement {
 }
 
 export interface CorrosionCalculation {
-  metal_loss_mm: number;
-  elapsed_time_years: number;
-  corrosion_rate_mm_per_year: number;
-  remaining_life_years: number;
-  minimum_thickness_mm: number;
-  formula_used: string;
+  metal_loss_mm?: number;
+  elapsed_time_years?: number;
+  corrosion_rate_mm_per_year?: number;
+  remaining_life_years?: number | null;
+  minimum_thickness_mm?: number;
+  formula_used?: string;
   inspection_interval_years?: number;
   remaining_margin_mm?: number;
+  component_id?: string;
+  previous_thickness_mm?: number;
+  current_thickness_mm?: number;
+  remaining_life_status?: string;
+  governing_cml?: string;
+  margin_check?: {
+    component_id?: string;
+    measured_thickness_mm?: number;
+    minimum_required_mm?: number;
+    margin_mm?: number;
+    status?: string;
+    is_acceptable?: boolean;
+    message?: string;
+  };
+}
+
+export interface VisualFindingItem {
+  finding_type?: string;
+  description: string;
+  label?: string;
+  confidence?: number;
+  location?: string;
+  bounding_box?: number[];
+}
+
+export interface OcrVisionSummary {
+  engine_name?: string;
+  status?: string;
+  findings_count: number;
+  equipment_tags: string[];
+  instrument_tags: string[];
+  findings?: VisualFindingItem[];
+  summary?: string;
+  model_used?: string;
+  provider?: string;
+  is_demo_fixture?: boolean;
+  reason?: string;
 }
 
 export interface CitationSource {
@@ -132,6 +169,8 @@ export interface AgentRunResponse {
     structured_validation?: StructuredValidationReport;
     total_steps_executed?: number;
     total_retries?: number;
+    ocr_vision_summary?: OcrVisionSummary;
+    governing_cml?: string;
   };
   execution_trace: StateTransition[];
   citations: CitationSource[];

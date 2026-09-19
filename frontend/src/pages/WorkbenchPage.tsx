@@ -359,6 +359,8 @@ export const WorkbenchPage: React.FC = () => {
           <EvidencePanel
             citations={citations.length > 0 ? citations : (result?.citations || [])}
             summary={result?.summary}
+            calculation={result?.calculation}
+            ocrVisionSummary={result?.ocr_vision_summary}
             routePreview={routePreview}
             validationReport={result?.structured_validation}
             isRunning={isRunning}

@@ -1924,6 +1924,220 @@ textarea:focus-visible,
   line-height: 1.4;
 }
 
+/* Calculation & Assessment Card (Concern 4) */
+.calculation-assessment-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.calc-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+}
+
+@media (max-width: 1360px) {
+  .calc-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.calc-metric-cell {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  min-width: 0;
+  transition: border-color var(--dur-fast) ease;
+}
+
+.calc-metric-cell:hover {
+  border-color: var(--border-medium);
+}
+
+.calc-metric-cell.cell-highlight {
+  border-left: 2px solid var(--accent);
+}
+
+.calc-metric-cell.cell-safe {
+  border-left: 2px solid var(--status-success);
+}
+
+.calc-metric-cell.cell-warning {
+  border-left: 2px solid var(--status-warning);
+}
+
+.calc-metric-cell.cell-critical {
+  border-left: 2px solid var(--status-error);
+}
+
+.calc-metric-label {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
+}
+
+.calc-metric-value {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calc-metric-value.val-highlight {
+  color: var(--accent);
+}
+
+.calc-metric-value.val-success {
+  color: var(--status-success);
+}
+
+.calc-metric-value.val-warning {
+  color: var(--status-warning);
+}
+
+.calc-metric-value.val-critical {
+  color: var(--status-error);
+}
+
+.calc-metric-value.val-muted {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.calc-metric-sub {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calc-details-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.675rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Executive Summary Card (Concern 4) */
+.executive-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.summary-text-block {
+  padding: 0.65rem 0.75rem;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-xs);
+  font-size: 0.775rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.summary-unavailable-text {
+  padding: 0.65rem 0.75rem;
+  background: var(--bg-canvas);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Visual Findings Card (Concern 4) */
+.visual-findings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.visual-tags-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.55rem;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+}
+
+.visual-tags-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.visual-tags-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.visual-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.visual-finding-item {
+  padding: 0.45rem 0.6rem;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 0.725rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.visual-finding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.visual-finding-label {
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.visual-finding-desc {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 /* Document Viewer specifics */
 .upload-dropzone {
   display: flex;

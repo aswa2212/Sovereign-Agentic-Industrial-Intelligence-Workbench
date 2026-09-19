@@ -1,13 +1,32 @@
 import React, { useState } from 'react';
-import { CitationSource, StructuredValidationReport } from '../types/agent';
+import {
+  CitationSource,
+  StructuredValidationReport,
+  CorrosionCalculation,
+  OcrVisionSummary,
+} from '../types/agent';
 import { RouteResponse } from '../types/api';
-import { BookOpen, FileText, ChevronDown, ChevronUp, ShieldCheck, Search, Cpu, CheckCircle2 } from 'lucide-react';
+import {
+  BookOpen,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Cpu,
+  CheckCircle2,
+  Calculator,
+  Eye,
+  AlertTriangle,
+  AlertCircle,
+} from 'lucide-react';
 import { ValidationGateFuseBox } from './ValidationGateFuseBox';
 import { DataSourceBadge } from './DataSourceBadge';
 
 interface EvidencePanelProps {
   citations: CitationSource[];
   summary?: string | null;
+  calculation?: CorrosionCalculation | null;
+  ocrVisionSummary?: OcrVisionSummary | null;
   routePreview?: RouteResponse | null;
   validationReport?: StructuredValidationReport | null;
   isRunning?: boolean;
@@ -17,6 +36,8 @@ interface EvidencePanelProps {
 export const EvidencePanel: React.FC<EvidencePanelProps> = ({
   citations,
   summary,
+  calculation,
+  ocrVisionSummary,
   routePreview,
   validationReport,
   isRunning = false,
@@ -37,6 +58,21 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
       (c.chunk_id && c.chunk_id.toLowerCase().includes(filterText.toLowerCase()))
   );
 
+  const hasVisualFindings = !!(
+    ocrVisionSummary &&
+    (
+      (ocrVisionSummary.findings_count !== undefined && ocrVisionSummary.findings_count > 0) ||
+      (ocrVisionSummary.equipment_tags && ocrVisionSummary.equipment_tags.length > 0) ||
+      (ocrVisionSummary.instrument_tags && ocrVisionSummary.instrument_tags.length > 0) ||
+      (ocrVisionSummary.findings && ocrVisionSummary.findings.length > 0)
+    )
+  );
+
+  // Derive assessment status dynamically
+  const isSafe = calculation?.margin_check?.is_acceptable ?? (calculation?.margin_check?.status === 'PASS');
+  const isRetire = calculation?.margin_check?.status === 'RETIRE' || calculation?.margin_check?.is_acceptable === false;
+  const isMonitor = calculation?.margin_check?.status === 'MONITOR';
+
   return (
     <div className="workbench-panel evidence-panel">
       {/* Panel Header */}
@@ -44,8 +80,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
         <div className="panel-header-title-group">
           <BookOpen size={16} className="panel-header-icon" />
           <div>
-            <h2 className="panel-title">Evidence &amp; Invariants</h2>
-            <span className="panel-subtitle">Gatekeeper &amp; RAG Citations</span>
+            <h2 className="panel-title">Evidence &amp; Assessment</h2>
+            <span className="panel-subtitle">Calculations, Invariants &amp; Synthesis</span>
           </div>
         </div>
 
@@ -58,7 +94,7 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
       </div>
 
       <div className="panel-body-scroll">
-        {/* Real-time Intent Routing Card */}
+        {/* 1. Real-time Intent Routing Card (Evidence) */}
         {routePreview && (
           <div className="evidence-card route-evidence-card">
             <div className="evidence-card-header">
@@ -95,10 +131,7 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
           </div>
         )}
 
-        {/* 12-Cell Status Grid (Fuse Box) */}
-        <ValidationGateFuseBox report={validationReport} isRunning={isRunning} />
-
-        {/* Sovereign RAG Citations Section */}
+        {/* 2. Sovereign RAG Citations Section (Evidence) */}
         <div className="evidence-card rag-citations-card">
           <div className="evidence-card-header">
             <div className="card-header-left">
@@ -188,6 +221,200 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
             </div>
           )}
         </div>
+
+        {/* 3. Engineering Calculation & Assessment Card */}
+        <div className="evidence-card calculation-assessment-card" id="calculation-assessment-card">
+          <div className="evidence-card-header">
+            <div className="card-header-left">
+              <Calculator size={14} className="accent-icon" />
+              <span className="card-heading">ENGINEERING CALCULATION &amp; ASSESSMENT</span>
+            </div>
+            {calculation ? (
+              <span
+                className={`badge-pill ${
+                  isSafe
+                    ? 'badge-success'
+                    : isRetire
+                    ? 'badge-error'
+                    : isMonitor
+                    ? 'badge-warning'
+                    : 'badge-neutral'
+                }`}
+              >
+                {isSafe
+                  ? 'CONTINUE SERVICE'
+                  : isRetire
+                  ? 'RETIRE / CRITICAL'
+                  : isMonitor
+                  ? 'MONITOR SERVICE'
+                  : calculation.margin_check?.status || calculation.remaining_life_status || 'ASSESSED'}
+              </span>
+            ) : (
+              <span className="badge-pill badge-neutral">
+                {isRunning ? 'CALCULATING...' : '—'}
+              </span>
+            )}
+          </div>
+
+          <div className="calc-metrics-grid">
+            {/* Corrosion Rate */}
+            <div className="calc-metric-cell cell-highlight">
+              <span className="calc-metric-label">CORROSION RATE</span>
+              <span className={`calc-metric-value ${calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null ? 'val-highlight' : 'val-muted'}`}>
+                {calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null
+                  ? `${calculation.corrosion_rate_mm_per_year} mm/yr`
+                  : '—'}
+              </span>
+              <span className="calc-metric-sub">API 570 Short-Term</span>
+            </div>
+
+            {/* Remaining Service Life */}
+            <div className={`calc-metric-cell ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'cell-safe' : 'cell-warning') : ''}`}>
+              <span className="calc-metric-label">REMAINING SERVICE LIFE</span>
+              <span className={`calc-metric-value ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'val-success' : 'val-warning') : 'val-muted'}`}>
+                {calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null
+                  ? `${calculation.remaining_life_years} yrs`
+                  : (calculation ? 'UNAVAILABLE' : '—')}
+              </span>
+              <span className="calc-metric-sub">To t_min limit</span>
+            </div>
+
+            {/* Total Metal Loss */}
+            <div className="calc-metric-cell">
+              <span className="calc-metric-label">TOTAL METAL LOSS</span>
+              <span className={`calc-metric-value ${calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null ? '' : 'val-muted'}`}>
+                {calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null
+                  ? `${calculation.metal_loss_mm} mm`
+                  : '—'}
+              </span>
+              <span className="calc-metric-sub">t_nominal - t_actual</span>
+            </div>
+
+            {/* Structural Margin */}
+            <div className={`calc-metric-cell ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'cell-safe' : 'cell-critical') : ''}`}>
+              <span className="calc-metric-label">STRUCTURAL MARGIN</span>
+              <span className={`calc-metric-value ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'val-success' : 'val-critical') : 'val-muted'}`}>
+                {calculation?.margin_check?.margin_mm !== undefined && calculation?.margin_check?.margin_mm !== null
+                  ? `${calculation.margin_check.margin_mm >= 0 ? '+' : ''}${calculation.margin_check.margin_mm} mm`
+                  : (calculation?.remaining_margin_mm !== undefined ? `${calculation.remaining_margin_mm} mm` : (calculation ? 'UNAVAILABLE' : '—'))}
+              </span>
+              <span className="calc-metric-sub">t_actual - t_required</span>
+            </div>
+
+            {/* Governing CML */}
+            <div className="calc-metric-cell">
+              <span className="calc-metric-label">GOVERNING CML</span>
+              <span className={`calc-metric-value ${calculation?.governing_cml || calculation?.component_id ? '' : 'val-muted'}`}>
+                {calculation?.governing_cml || calculation?.component_id || (calculation ? 'UNAVAILABLE' : '—')}
+              </span>
+              <span className="calc-metric-sub">Critical inspection point</span>
+            </div>
+
+            {/* Assessment Status */}
+            <div className="calc-metric-cell">
+              <span className="calc-metric-label">ASSESSMENT STATUS</span>
+              <span className={`calc-metric-value ${
+                isSafe
+                  ? 'val-success'
+                  : isRetire
+                  ? 'val-critical'
+                  : isMonitor
+                  ? 'val-warning'
+                  : 'val-muted'
+              }`}>
+                {calculation?.margin_check?.status || calculation?.remaining_life_status || (calculation ? 'UNAVAILABLE' : '—')}
+              </span>
+              <span className="calc-metric-sub">Integrity disposition</span>
+            </div>
+          </div>
+
+          {calculation && (
+            <div className="calc-details-footer">
+              <span>Formula: <code>{calculation.formula_used || 'API 570: Cr = (t_initial - t_actual) / Δt'}</code></span>
+              {calculation.previous_thickness_mm !== undefined && calculation.current_thickness_mm !== undefined && (
+                <span>Baseline: <code>{calculation.previous_thickness_mm} mm → {calculation.current_thickness_mm} mm</code> ({calculation.elapsed_time_years ?? '—'} yrs)</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 4. Executive Summary Card */}
+        <div className="evidence-card executive-summary-card" id="executive-summary-card">
+          <div className="evidence-card-header">
+            <div className="card-header-left">
+              <FileText size={14} className="accent-icon" />
+              <span className="card-heading">EXECUTIVE SUMMARY</span>
+            </div>
+            <span className="subtle-note">Autonomous Engineering Synthesis</span>
+          </div>
+          <div className="executive-summary-body">
+            {summary && summary.trim() ? (
+              <div className="summary-text-block">
+                {summary}
+              </div>
+            ) : (
+              <div className="summary-unavailable-text">
+                SUMMARY UNAVAILABLE
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 5. Visual Findings Card (Omitted if no visual findings) */}
+        {hasVisualFindings && (
+          <div className="evidence-card visual-findings-card" id="visual-findings-card">
+            <div className="evidence-card-header">
+              <div className="card-header-left">
+                <Eye size={14} className="accent-icon" />
+                <span className="card-heading">VISUAL FINDINGS (OCR/VLM)</span>
+              </div>
+              <span className="badge-pill badge-neutral">
+                {ocrVisionSummary?.findings_count || 0} EXTRACTED
+              </span>
+            </div>
+
+            {ocrVisionSummary?.equipment_tags && ocrVisionSummary.equipment_tags.length > 0 && (
+              <div className="visual-tags-section">
+                <span className="visual-tags-label">EQUIPMENT TAGS:</span>
+                <div className="visual-tags-group">
+                  {ocrVisionSummary.equipment_tags.map((tag, idx) => (
+                    <code key={idx} className="cml-tag-badge">{tag}</code>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ocrVisionSummary?.instrument_tags && ocrVisionSummary.instrument_tags.length > 0 && (
+              <div className="visual-tags-section">
+                <span className="visual-tags-label">INSTRUMENT TAGS:</span>
+                <div className="visual-tags-group">
+                  {ocrVisionSummary.instrument_tags.map((tag, idx) => (
+                    <code key={idx} className="cml-tag-badge">{tag}</code>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ocrVisionSummary?.findings && ocrVisionSummary.findings.length > 0 && (
+              <div className="visual-findings-list">
+                {ocrVisionSummary.findings.map((f, idx) => (
+                  <div key={idx} className="visual-finding-item">
+                    <div className="visual-finding-header">
+                      <span className="visual-finding-label">{f.label || f.finding_type || `Finding #${idx + 1}`}</span>
+                      {f.confidence !== undefined && (
+                        <span className="citation-match-tag">{Math.round(f.confidence * 100)}% CONF</span>
+                      )}
+                    </div>
+                    <div className="visual-finding-desc">{f.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 6. 12-Cell Status Grid (Validation Gate Fuse Box) */}
+        <ValidationGateFuseBox report={validationReport} isRunning={isRunning} />
       </div>
     </div>
   );
