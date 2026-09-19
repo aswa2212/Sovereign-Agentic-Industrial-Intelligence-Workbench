@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Eye,
   Table,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { CopyableMono } from './CopyableMono';
 
@@ -20,6 +22,9 @@ interface DocumentViewerProps {
   selectedDoc?: DocumentIngestionResult | null;
   onSelectDoc?: (doc: DocumentIngestionResult) => void;
   compact?: boolean;
+  isFocused?: boolean;
+  onToggleFocus?: () => void;
+  selectedEquipmentId?: string;
 }
 
 interface ThicknessSurveyRow {
@@ -61,6 +66,9 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   selectedDoc,
   onSelectDoc,
   compact = false,
+  isFocused = false,
+  onToggleFocus,
+  selectedEquipmentId,
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -96,7 +104,25 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
   };
 
-  const activeDoc = selectedDoc || activePreviewDoc || null;
+  const isDemoFallback = !selectedDoc && !activePreviewDoc && Boolean(selectedEquipmentId);
+  const demoPresetDoc: DocumentIngestionResult | null = isDemoFallback
+    ? {
+        filename: `${selectedEquipmentId}_UT_Wall_Survey_2026.xlsx`,
+        status: 'completed' as const,
+        page_count: 1,
+        table_count: 1,
+        size_bytes: 48120,
+        sha256: DEMO_C101_SHA256,
+        is_demo_preset: true,
+        extraction_summary: 'Ultrasonic thickness survey gauging grid parsed.',
+        evidence: {
+          equipment_id: selectedEquipmentId,
+          measurements: [],
+        },
+      }
+    : null;
+
+  const activeDoc = selectedDoc || activePreviewDoc || demoPresetDoc;
 
   return (
     <div className="workbench-panel document-viewer-panel">
@@ -114,6 +140,17 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <span className="badge-pill badge-neutral">
             {documents.length} File{documents.length === 1 ? '' : 's'}
           </span>
+          {onToggleFocus && (
+            <button
+              type="button"
+              className={`panel-header-btn ${isFocused ? 'is-active' : ''}`}
+              onClick={onToggleFocus}
+              title={isFocused ? 'Restore 3-Column Cockpit (Esc)' : 'Focus Document Viewer (Full Width)'}
+              aria-label={isFocused ? 'Restore 3-Column Cockpit' : 'Focus Document Viewer'}
+            >
+              {isFocused ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          )}
         </div>
       </div>
 

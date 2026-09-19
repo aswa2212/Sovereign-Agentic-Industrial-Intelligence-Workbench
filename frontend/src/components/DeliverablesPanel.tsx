@@ -6,9 +6,13 @@ import {
   Download,
   FileSpreadsheet,
   CheckCircle2,
+  FileCheck2,
   RefreshCw,
   Lock,
   ExternalLink,
+  ShieldCheck,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { CopyableMono } from './CopyableMono';
 import { useToast } from './ToastProvider';
@@ -26,6 +30,8 @@ interface DeliverablesPanelProps {
   onGenerated?: (artifacts: GeneratedArtifact[]) => void;
   validationPassed?: boolean;
   executionMode?: 'deterministic' | 'live';
+  isFocused?: boolean;
+  onToggleFocus?: () => void;
 }
 
 export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
@@ -40,6 +46,8 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
   onGenerated,
   validationPassed = true,
   executionMode = 'deterministic',
+  isFocused = false,
+  onToggleFocus,
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +168,17 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
                 )}
               </button>
             </>
+          )}
+          {onToggleFocus && (
+            <button
+              type="button"
+              className={`panel-header-btn ${isFocused ? 'is-active' : ''}`}
+              onClick={onToggleFocus}
+              title={isFocused ? 'Restore 3-Column Cockpit (Esc)' : 'Focus Deliverables Column (Full Width)'}
+              aria-label={isFocused ? 'Restore 3-Column Cockpit' : 'Focus Deliverables Column'}
+            >
+              {isFocused ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
           )}
         </div>
       </div>

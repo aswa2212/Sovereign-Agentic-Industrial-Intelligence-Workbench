@@ -19,8 +19,10 @@ import {
   AlertTriangle,
   AlertCircle,
   ShieldCheck,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
-import { ValidationGateFuseBox } from './ValidationGateFuseBox';
+import { ValidationGateFuseBox, evaluateValidationGate } from './ValidationGateFuseBox';
 import { DataSourceBadge } from './DataSourceBadge';
 
 interface EvidencePanelProps {
@@ -32,6 +34,8 @@ interface EvidencePanelProps {
   validationReport?: StructuredValidationReport | null;
   isRunning?: boolean;
   executionMode?: 'deterministic' | 'live';
+  isFocused?: boolean;
+  onToggleFocus?: () => void;
 }
 
 export const EvidencePanel: React.FC<EvidencePanelProps> = ({
@@ -43,6 +47,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
   validationReport,
   isRunning = false,
   executionMode = 'deterministic',
+  isFocused = false,
+  onToggleFocus,
 }) => {
   const [activeTab, setActiveTab] = useState<'validation' | 'calculations' | 'ocr' | 'citations'>('validation');
   const [expandedChunk, setExpandedChunk] = useState<string | null>(
@@ -74,6 +80,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
   const isSafe = calculation?.margin_check?.is_acceptable ?? (calculation?.margin_check?.status === 'PASS');
   const isRetire = calculation?.margin_check?.status === 'RETIRE' || calculation?.margin_check?.is_acceptable === false;
   const isMonitor = calculation?.margin_check?.status === 'MONITOR';
+  // Evaluate validation gate through single authoritative source
+  const valGate = evaluateValidationGate(validationReport);
 
   return (
     <div className="workbench-panel evidence-panel">
@@ -92,6 +100,17 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
             source={hasCitations ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
             label={hasCitations ? (isLive ? 'LIVE LOCAL CORPUS' : 'DEMO — SYNTHETIC CORPUS') : 'NO EVIDENCE LOADED'}
           />
+          {onToggleFocus && (
+            <button
+              type="button"
+              className={`panel-header-btn ${isFocused ? 'is-active' : ''}`}
+              onClick={onToggleFocus}
+              title={isFocused ? 'Restore 3-Column Cockpit (Esc)' : 'Focus Evidence & Assessment (Full Width)'}
+              aria-label={isFocused ? 'Restore 3-Column Cockpit' : 'Focus Evidence & Assessment'}
+            >
+              {isFocused ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          )}
         </div>
       </div>
 
@@ -142,8 +161,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
         >
           <ShieldCheck size={13} />
           <span>Validation Gate</span>
-          <span className="tab-pill-badge">
-            {validationReport ? `${validationReport.checks_passed_count}/12` : '12/12'}
+          <span className={`tab-pill-badge ${valGate.hasReport ? (valGate.isAllPassed ? 'badge-safe' : 'badge-alert') : ''}`}>
+            {valGate.passedCount}/{valGate.totalCount}
           </span>
         </button>
 

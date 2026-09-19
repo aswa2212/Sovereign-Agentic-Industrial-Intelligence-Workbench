@@ -1,6 +1,6 @@
 import React from 'react';
 import { AgentState, StateTransition } from '../types/agent';
-import { CheckCircle2, Clock, AlertCircle, Activity } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Activity, ChevronDown, ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
 import { DataSourceBadge } from './DataSourceBadge';
 
 interface AgentGraphTraceProps {
@@ -9,6 +9,10 @@ interface AgentGraphTraceProps {
   trace: StateTransition[];
   taskId?: string | null;
   executionMode?: 'deterministic' | 'live';
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  isFocused?: boolean;
+  onToggleFocus?: () => void;
 }
 
 const ORDERED_STATES: AgentState[] = [
@@ -29,6 +33,10 @@ export const AgentGraphTrace: React.FC<AgentGraphTraceProps> = ({
   trace,
   taskId,
   executionMode = 'deterministic',
+  isCollapsed = false,
+  onToggleCollapse,
+  isFocused = false,
+  onToggleFocus,
 }) => {
   const visitedStates = new Set<AgentState>(trace.map((t) => t.to_state));
   if (currentState !== 'IDLE' && currentState !== 'FAILED') {
@@ -49,14 +57,22 @@ export const AgentGraphTrace: React.FC<AgentGraphTraceProps> = ({
   };
 
   return (
-    <div className="workbench-panel agent-trace-panel">
+    <div className={`workbench-panel agent-trace-panel ${isCollapsed ? 'is-collapsed' : ''}`}>
       {/* Panel Header */}
       <div className="panel-header">
         <div className="panel-header-title-group">
           <Activity size={16} className={`panel-header-icon ${isRunning ? 'icon-spin' : ''}`} />
           <div>
             <h2 className="panel-title">Agent Execution Graph</h2>
-            <span className="panel-subtitle">11-Stage State Machine</span>
+            <span className="panel-subtitle">
+              {isCollapsed
+                ? (currentState === 'DELIVER' || visitedStates.has('DELIVER')
+                    ? `${visitedStates.size}/11 States Completed • Verified`
+                    : isFailed
+                    ? 'Sequence Halted (Failed)'
+                    : '11-Stage Sequence (Collapsed)')
+                : '11-Stage State Machine'}
+            </span>
           </div>
         </div>
 
@@ -91,25 +107,54 @@ export const AgentGraphTrace: React.FC<AgentGraphTraceProps> = ({
           ) : (
             <span className="badge-pill badge-neutral">IDLE</span>
           )}
+          {onToggleCollapse && (
+            <button
+              type="button"
+              className="panel-header-btn"
+              onClick={onToggleCollapse}
+              title={isCollapsed ? 'Expand Agent Trace (View event sequence)' : 'Collapse Agent Trace (Recover Deliverables space)'}
+              aria-label={isCollapsed ? 'Expand Agent Trace' : 'Collapse Agent Trace'}
+            >
+              {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </button>
+          )}
+          {onToggleFocus && (
+            <button
+              type="button"
+              className={`panel-header-btn ${isFocused ? 'is-active' : ''}`}
+              onClick={onToggleFocus}
+              title={isFocused ? 'Restore 3-Column Cockpit (Esc)' : 'Focus Lifecycle Column (Full Width)'}
+              aria-label={isFocused ? 'Restore 3-Column Cockpit' : 'Focus Lifecycle Column'}
+            >
+              {isFocused ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          )}
         </div>
       </div>
 
+      {!isCollapsed && (
       <div className="trace-body">
         {/* Pipeline Nodes Strip */}
-        <div className="state-pipeline-strip">
+        <div className="state-pipeline-strip" role="list" aria-label="11-Stage Agent Execution Pipeline">
           {ORDERED_STATES.map((state, idx) => {
             const status = getStateStatus(state);
             return (
               <React.Fragment key={state}>
                 <div
                   className={`pipeline-node node-${status}`}
-                  title={`State: ${state} (${status})`}
+                  title={`Stage ${idx + 1}/9: ${state} (${status})`}
+                  role="listitem"
                 >
                   <div className="pipeline-dot" />
                   <span className="pipeline-label">{state}</span>
                 </div>
                 {idx < ORDERED_STATES.length - 1 && (
-                  <div className={`pipeline-connector conn-${status === 'completed' ? 'active' : 'inactive'}`} />
+                  <span
+                    className={`pipeline-arrow ${status === 'completed' ? 'is-active' : ''}`}
+                    aria-hidden="true"
+                  >
+                    &rarr;
+                  </span>
                 )}
               </React.Fragment>
             );
@@ -141,6 +186,7 @@ export const AgentGraphTrace: React.FC<AgentGraphTraceProps> = ({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAgentTask } from '../hooks/useAgentTask';
 import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
@@ -76,6 +76,17 @@ export const WorkbenchPage: React.FC = () => {
   const [artifacts, setArtifacts] = useState<GeneratedArtifact[]>([]);
 
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
+  const [focusedColumn, setFocusedColumn] = useState<'documents' | 'evidence' | 'lifecycle' | null>(null);
+  const [isTraceCollapsed, setIsTraceCollapsed] = useState(false);
+  const prevRunningRef = useRef(isRunning);
+
+  const handleToggleFocus = useCallback((col: 'documents' | 'evidence' | 'lifecycle') => {
+    setFocusedColumn((prev) => (prev === col ? null : col));
+  }, []);
+
+  const handleToggleTraceCollapse = useCallback(() => {
+    setIsTraceCollapsed((prev) => !prev);
+  }, []);
 
   // Strict task isolation: only render deliverables belonging to the current task_id
   const currentArtifacts = deliverables.filter((d) => !taskId || d.task_id === taskId);
@@ -114,12 +125,14 @@ export const WorkbenchPage: React.FC = () => {
   const handleStartTask = useCallback(async () => {
     if (!taskInput.trim() || isRunning) return;
 
-    // Reset local artifacts cache before starting new task
+    // Reset local artifacts cache before starting new task and auto-expand trace
     setArtifacts([]);
+    setIsTraceCollapsed(false);
     toast.info('Starting Task', `Executing in ${executionMode.toUpperCase()} mode...`);
     const res = await executeTask(taskInput, maxSteps, executionMode, selectedEquipmentId, selectedFile);
 
     if (res) {
+      setIsTraceCollapsed(true);
       toast.success(
         'Task Completed',
         '12/12 engineering invariants satisfied. Deliverables verified.'
@@ -129,7 +142,17 @@ export const WorkbenchPage: React.FC = () => {
     }
   }, [taskInput, isRunning, executionMode, selectedEquipmentId, selectedFile, executeTask, toast]);
 
-  // Keyboard shortcuts inside the Workbench (Enter to run, Esc to cancel/reset)
+  // Auto-collapse Agent Trace after task completion to maximize vertical space for Deliverables Factory
+  useEffect(() => {
+    if (prevRunningRef.current && !isRunning) {
+      if (currentState === 'DELIVER' || (trace && trace.length > 0)) {
+        setIsTraceCollapsed(true);
+      }
+    }
+    prevRunningRef.current = isRunning;
+  }, [isRunning, currentState, trace]);
+
+  // Keyboard shortcuts inside the Workbench (Enter to run, Esc to cancel/reset/unfocus)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if user is in an input or textarea unless Ctrl/Cmd+Enter is pressed, or if not focused in textarea
@@ -142,7 +165,10 @@ export const WorkbenchPage: React.FC = () => {
           handleStartTask();
         }
       } else if (e.key === 'Escape') {
-        if (isPromptExpanded) {
+        if (focusedColumn) {
+          e.preventDefault();
+          setFocusedColumn(null);
+        } else if (isPromptExpanded) {
           e.preventDefault();
           setIsPromptExpanded(false);
         } else if (isRunning) {
@@ -155,7 +181,7 @@ export const WorkbenchPage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleStartTask, isRunning, taskInput, reset, toast, isPromptExpanded]);
+  }, [handleStartTask, isRunning, taskInput, reset, toast, isPromptExpanded, focusedColumn]);
 
   const handleSelectPreset = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = Number(e.target.value);
@@ -394,8 +420,8 @@ export const WorkbenchPage: React.FC = () => {
         </div>
       )}
 
-      {/* NON-NEGOTIABLE 3-COLUMN ENGINEERING LAYOUT */}
-      <div className="workbench-three-columns-grid">
+      {/* 3-COLUMN ASYMMETRIC ENGINEERING GRID (WITH COLUMN FOCUS & TRACE RECOVERY) */}
+      <div className={`workbench-three-columns-grid ${focusedColumn ? `is-focused focus-${focusedColumn}` : ''}`}>
         {/* Column 1: Source Document Viewer & NDT Table */}
         <div className="workbench-column col-documents">
           <DocumentViewer
@@ -414,6 +440,9 @@ export const WorkbenchPage: React.FC = () => {
               syncEquipmentIdFromDoc(doc);
               toast.success('Document Uploaded', `Ingested ${doc.filename} (${doc.sha256.substring(0, 12)}...)`);
             }}
+            isFocused={focusedColumn === 'documents'}
+            onToggleFocus={() => handleToggleFocus('documents')}
+            selectedEquipmentId={selectedEquipmentId}
           />
         </div>
 
@@ -428,17 +457,23 @@ export const WorkbenchPage: React.FC = () => {
             validationReport={result?.structured_validation}
             isRunning={isRunning}
             executionMode={executionMode}
+            isFocused={focusedColumn === 'evidence'}
+            onToggleFocus={() => handleToggleFocus('evidence')}
           />
         </div>
 
         {/* Column 3: Agent Lifecycle Timeline & Deliverables Factory */}
-        <div className="workbench-column col-lifecycle-deliverables">
+        <div className={`workbench-column col-lifecycle-deliverables ${isTraceCollapsed ? 'trace-collapsed' : ''}`}>
           <AgentGraphTrace
             currentState={currentState}
             isRunning={isRunning}
             trace={trace}
             taskId={taskId}
             executionMode={executionMode}
+            isCollapsed={isTraceCollapsed}
+            onToggleCollapse={handleToggleTraceCollapse}
+            isFocused={focusedColumn === 'lifecycle'}
+            onToggleFocus={() => handleToggleFocus('lifecycle')}
           />
           <DeliverablesPanel
             artifacts={currentArtifacts.length > 0 ? currentArtifacts : (taskId ? artifacts.filter(a => a.task_id === taskId) : [])}
@@ -456,6 +491,8 @@ export const WorkbenchPage: React.FC = () => {
             onGenerated={handleArtifactsGenerated}
             validationPassed={!!result?.structured_validation?.valid}
             executionMode={executionMode}
+            isFocused={focusedColumn === 'lifecycle'}
+            onToggleFocus={() => handleToggleFocus('lifecycle')}
           />
         </div>
       </div>
