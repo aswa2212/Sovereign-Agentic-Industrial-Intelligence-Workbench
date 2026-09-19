@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   ShieldCheck,
   ShieldAlert,
-  Cpu,
   Database,
   FileCheck2,
   Activity,
@@ -26,7 +25,7 @@ import { CopyableMono } from '../components/CopyableMono';
 
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { sovereignty, network, activeModel, tierConfig, loading: sovLoading } = useSovereignty(10000);
+  const { sovereignty, network, tierConfig, loading: sovLoading } = useSovereignty(10000);
 
   const [recentEvents, setRecentEvents] = useState<AuditEvent[]>([]);
   const [deliverables, setDeliverables] = useState<GeneratedArtifact[]>([]);
@@ -158,15 +157,23 @@ export const OverviewPage: React.FC = () => {
             </span>
           </div>
 
-          <div className="active-model-display">
-            <div className="model-label-row">
-              <span className="subtle-label">Active Generation Tag:</span>
-              <span className="live-tag">GPU:0 RESIDENT</span>
+          <div className="portfolio-models-list">
+            <div className="portfolio-list-header">
+              <span className="subtle-label">CONFIGURED ROLE</span>
+              <span className="subtle-label">MODEL TAG</span>
             </div>
-            <div className="model-name-box">
-              <Cpu size={22} className="accent-icon" />
-              <span className="model-primary-tag">{activeModel}</span>
-            </div>
+            {tierConfig?.models && tierConfig.models.length > 0 ? (
+              tierConfig.models.map((model) => (
+                <div key={model.role} className="portfolio-model-row">
+                  <span className="portfolio-role-badge">{model.role.toUpperCase()}</span>
+                  <code className="portfolio-model-tag">{model.model_tag}</code>
+                </div>
+              ))
+            ) : (
+              <div className="portfolio-loading-row">
+                <span className="subtle-label">Loading configured models...</span>
+              </div>
+            )}
           </div>
 
           <div className="vram-budget-strip">
