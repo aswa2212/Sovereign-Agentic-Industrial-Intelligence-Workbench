@@ -38,6 +38,23 @@ const SAMPLE_SURVEY_DATA: ThicknessSurveyRow[] = [
   { cml_tag: 'CML-4', location_desc: 'Overhead Condenser Vapor Line Elbow E-02', nominal_mm: 12.0, actual_mm: 10.10, loss_mm: 1.90, date_measured: '2026-03-12' },
 ];
 
+export const DEMO_C101_SHA256 = '30dfb6cc4472edd29002b273018f57c506153f4cdb0ecdaba18e2f43f3613cf8';
+
+export const isApprovedDemoPreset = (doc?: DocumentIngestionResult | null): boolean => {
+  if (!doc) return false;
+  if (doc.is_demo_preset === true) return true;
+  if (doc.sha256 === DEMO_C101_SHA256) return true;
+  const ev = (doc as any).evidence;
+  if (
+    ev?.elapsed_time_source === 'DEMO_PRESET' ||
+    ev?.minimum_thickness_source === 'DEMO_PRESET' ||
+    ev?.equipment_id_source === 'DEMO_PRESET'
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   documents,
   onUploadSuccess,
@@ -239,10 +256,10 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             );
           }
 
-          const isC101Demo = activeDoc.filename.toLowerCase().includes('c101') || activeDoc.filename.toLowerCase().includes('c-101');
+          const isApprovedDemo = isApprovedDemoPreset(activeDoc);
           const rawMeasurements: any[] = (activeDoc as any).evidence?.measurements || [];
 
-          if (rawMeasurements.length === 0 && !isC101Demo) {
+          if (rawMeasurements.length === 0 && !isApprovedDemo) {
             return (
               <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
                 <h3 style={{ color: 'var(--text-muted)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
@@ -264,13 +281,13 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 loss_mm: m.loss_mm ?? (m.nominal_thickness_mm ? Math.round((m.nominal_thickness_mm - m.measured_thickness_mm) * 100) / 100 : 0),
                 date_measured: m.measurement_date || '—',
               }))
-            : SAMPLE_SURVEY_DATA;
+            : (isApprovedDemo ? SAMPLE_SURVEY_DATA : []);
 
-          const minActual = Math.min(...displayRows.map(r => r.actual_mm));
+          const minActual = displayRows.length > 0 ? Math.min(...displayRows.map(r => r.actual_mm)) : 0;
 
           return (
             <div className="evidence-card survey-table-card">
-              {isC101Demo && rawMeasurements.length === 0 && (
+              {isApprovedDemo && rawMeasurements.length === 0 && (
                 <div style={{ padding: '0.5rem 1rem', background: 'rgba(56, 189, 248, 0.1)', borderBottom: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8' }}>DEMO PRESET: C-101 Corrosion Audit</span>
                   <span className="badge-pill badge-neutral" style={{ fontSize: '0.65rem' }}>Sample Data</span>
@@ -329,13 +346,13 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           }
 
           const ev = (activeDoc as any).evidence;
-          const isC101 = activeDoc.filename.toLowerCase().includes('c101') || activeDoc.filename.toLowerCase().includes('c-101');
+          const isApprovedDemo = isApprovedDemoPreset(activeDoc);
 
-          const eqTag = ev?.equipment_id || (isC101 ? 'C-101' : 'UNSPECIFIED');
-          const nomThick = ev?.nominal_thickness_mm != null ? `${ev.nominal_thickness_mm.toFixed(2)} mm` : (isC101 ? '12.00 mm' : 'UNAVAILABLE');
-          const curThick = ev?.current_thickness_mm != null ? `${ev.current_thickness_mm.toFixed(2)} mm` : (isC101 ? '10.10 mm' : 'UNAVAILABLE');
-          const minThick = ev?.minimum_required_thickness_mm != null ? `${ev.minimum_required_thickness_mm.toFixed(2)} mm` : (isC101 ? '8.00 mm' : 'UNAVAILABLE');
-          const elapsed = ev?.elapsed_time_years != null ? `${ev.elapsed_time_years} Years` : (isC101 ? '5.00 Years' : 'UNAVAILABLE');
+          const eqTag = ev?.equipment_id || (isApprovedDemo ? 'C-101' : 'UNAVAILABLE');
+          const nomThick = ev?.nominal_thickness_mm != null ? `${ev.nominal_thickness_mm.toFixed(2)} mm` : (isApprovedDemo ? '12.00 mm' : 'UNAVAILABLE');
+          const curThick = ev?.current_thickness_mm != null ? `${ev.current_thickness_mm.toFixed(2)} mm` : (isApprovedDemo ? '10.10 mm' : 'UNAVAILABLE');
+          const minThick = ev?.minimum_required_thickness_mm != null ? `${ev.minimum_required_thickness_mm.toFixed(2)} mm` : (isApprovedDemo ? '8.00 mm' : 'UNAVAILABLE');
+          const elapsed = ev?.elapsed_time_years != null ? `${ev.elapsed_time_years} Years` : (isApprovedDemo ? '5.00 Years' : 'UNAVAILABLE');
 
           return (
             <div className="evidence-card params-card">

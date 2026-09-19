@@ -4,7 +4,7 @@ import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
 import { AgentGraphTrace } from '../components/AgentGraphTrace';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { DeliverablesPanel } from '../components/DeliverablesPanel';
-import { DocumentViewer } from '../components/DocumentViewer';
+import { DocumentViewer, isApprovedDemoPreset } from '../components/DocumentViewer';
 import { DocumentIngestionResult } from '../types/documents';
 import { GeneratedArtifact } from '../types/deliverables';
 import { systemService } from '../services/system';
@@ -158,6 +158,17 @@ export const WorkbenchPage: React.FC = () => {
     }
   };
 
+  const syncEquipmentIdFromDoc = (doc: DocumentIngestionResult) => {
+    const extractedEq = (doc as any).evidence?.equipment_id;
+    if (extractedEq && typeof extractedEq === 'string' && extractedEq.trim()) {
+      setSelectedEquipmentId(extractedEq.trim());
+    } else if (isApprovedDemoPreset(doc)) {
+      setSelectedEquipmentId('C-101');
+    } else {
+      setSelectedEquipmentId('');
+    }
+  };
+
   const handleArtifactsGenerated = (newArtifacts: GeneratedArtifact[]) => {
     setArtifacts((prev) => {
       const existingIds = new Set(prev.map((a) => a.artifact_id));
@@ -238,6 +249,7 @@ export const WorkbenchPage: React.FC = () => {
                 setSelectedFile(null);
                 setSelectedDoc(null);
                 setDocuments([]);
+                setSelectedEquipmentId(PRESET_TASKS[0].equipmentId);
               }}
               disabled={isRunning}
               title="Reset workbench state"
@@ -326,13 +338,17 @@ export const WorkbenchPage: React.FC = () => {
           <DocumentViewer
             documents={documents}
             selectedDoc={selectedDoc}
-            onSelectDoc={setSelectedDoc}
+            onSelectDoc={(doc) => {
+              setSelectedDoc(doc);
+              syncEquipmentIdFromDoc(doc);
+            }}
             onUploadSuccess={(doc, file) => {
               setDocuments((prev) => [doc, ...prev]);
               setSelectedDoc(doc);
               if (file) {
                 setSelectedFile(file);
               }
+              syncEquipmentIdFromDoc(doc);
               toast.success('Document Uploaded', `Ingested ${doc.filename} (${doc.sha256.substring(0, 12)}...)`);
             }}
           />
@@ -370,7 +386,7 @@ export const WorkbenchPage: React.FC = () => {
                 ? (result.summary as any).findings_count
                 : undefined
             }
-            equipmentId={selectedEquipmentId}
+            equipmentId={selectedEquipmentId || (selectedDoc as any)?.evidence?.equipment_id || 'UNAVAILABLE'}
             summary={typeof result?.summary === 'string' ? result.summary : taskInput}
             onGenerated={handleArtifactsGenerated}
             validationPassed={!!result?.structured_validation?.valid}

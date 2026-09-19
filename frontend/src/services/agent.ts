@@ -46,15 +46,22 @@ export const agentService = {
   async runWorkflow(
     objective: string,
     mode: 'deterministic' | 'live' = 'deterministic',
-    componentId = 'C-101',
-    file?: File | null
+    componentId?: string | null,
+    file?: File | null,
+    isDemo?: boolean
   ): Promise<any> {
     const formData = new FormData();
     formData.append('objective', objective);
     formData.append('mode', mode);
-    formData.append('component_id', componentId);
+    if (componentId && componentId.trim() && componentId.trim() !== 'UNAVAILABLE') {
+      formData.append('component_id', componentId.trim());
+    }
     if (file) {
       formData.append('file', file, file.name);
+    }
+    const demoFlag = isDemo !== undefined ? isDemo : (!file);
+    if (demoFlag) {
+      formData.append('is_demo', 'true');
     }
     return request<any>('/workflows/corrosion-audit', {
       method: 'POST',

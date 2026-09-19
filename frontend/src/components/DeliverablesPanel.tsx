@@ -35,7 +35,7 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
   activeModel,
   sourceDocument,
   visualFindingsCount,
-  equipmentId = 'C-101',
+  equipmentId = 'UNAVAILABLE',
   summary = 'Corrosion and integrity analysis findings.',
   onGenerated,
   validationPassed = true,

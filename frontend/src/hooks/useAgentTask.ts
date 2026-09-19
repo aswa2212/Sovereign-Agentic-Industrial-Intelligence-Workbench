@@ -52,7 +52,7 @@ export function useAgentTask() {
     taskText: string,
     maxSteps = 8,
     mode: 'deterministic' | 'live' = 'deterministic',
-    componentId = 'C-101',
+    componentId?: string | null,
     file?: File | null,
   ) => {
     // Rule 8: Clear ALL previous execution state before sending the request

@@ -259,7 +259,10 @@ class IngestionService:
         # 9a. Extract structured engineering evidence
         evidence_dict = None
         try:
-            from app.services.ingestion.evidence import EngineeringEvidenceExtractor
+            try:
+                from app.services.ingestion.evidence import EngineeringEvidenceExtractor
+            except ImportError:
+                from backend.app.services.ingestion.evidence import EngineeringEvidenceExtractor
             ev = EngineeringEvidenceExtractor().extract(normalized_doc)
             evidence_dict = ev.model_dump()
         except Exception:
