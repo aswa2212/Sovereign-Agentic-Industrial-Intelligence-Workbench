@@ -63,26 +63,65 @@ class RuntimeNetworkMonitor:
     def _observe_with_psutil(self, timestamp: str) -> NetworkObservationReport:
         connections: List[NetworkConnectionRecord] = []
         try:
-            # First attempt current process connections (safe across platforms without admin privs)
+            # Inspect current process and its recursive child processes
             proc = self._psutil.Process(os.getpid())
-            conns = proc.net_connections(kind="inet") if hasattr(proc, "net_connections") else proc.connections(kind="inet")
-            for c in conns:
-                laddr = f"{c.laddr.ip}:{c.laddr.port}" if c.laddr else "unknown"
-                raddr = f"{c.raddr.ip}:{c.raddr.port}" if c.raddr else None
-                rhost = c.raddr.ip if c.raddr else None
-                is_loop = is_local_or_loopback_address(rhost)
+            processes_to_inspect = [proc]
+            try:
+                processes_to_inspect.extend(proc.children(recursive=True))
+            except (
+                getattr(self._psutil, "NoSuchProcess", Exception),
+                getattr(self._psutil, "AccessDenied", Exception),
+                getattr(self._psutil, "ZombieProcess", Exception),
+            ):
+                pass
+            except Exception:
+                pass
 
-                connections.append(
-                    NetworkConnectionRecord(
-                        timestamp=timestamp,
-                        pid=proc.pid,
-                        process_name=proc.name(),
-                        local_address=laddr,
-                        remote_address=raddr,
-                        status=c.status,
-                        is_loopback=is_loop
+            for p in processes_to_inspect:
+                try:
+                    p_pid = p.pid
+                    try:
+                        p_name = p.name()
+                    except (
+                        getattr(self._psutil, "NoSuchProcess", Exception),
+                        getattr(self._psutil, "AccessDenied", Exception),
+                        getattr(self._psutil, "ZombieProcess", Exception),
+                    ):
+                        p_name = "unknown"
+                    except Exception:
+                        p_name = "unknown"
+
+                    p_conns = (
+                        p.net_connections(kind="inet")
+                        if hasattr(p, "net_connections")
+                        else p.connections(kind="inet")
                     )
-                )
+                    for c in p_conns:
+                        laddr = f"{c.laddr.ip}:{c.laddr.port}" if c.laddr else "unknown"
+                        raddr = f"{c.raddr.ip}:{c.raddr.port}" if c.raddr else None
+                        rhost = c.raddr.ip if c.raddr else None
+                        is_loop = is_local_or_loopback_address(rhost)
+
+                        connections.append(
+                            NetworkConnectionRecord(
+                                timestamp=timestamp,
+                                pid=p_pid,
+                                process_name=p_name,
+                                local_address=laddr,
+                                remote_address=raddr,
+                                status=c.status,
+                                is_loopback=is_loop,
+                            )
+                        )
+                except (
+                    getattr(self._psutil, "NoSuchProcess", Exception),
+                    getattr(self._psutil, "AccessDenied", Exception),
+                    getattr(self._psutil, "ZombieProcess", Exception),
+                ):
+                    # Process or child terminated or inaccessible during inspection
+                    continue
+                except Exception:
+                    continue
 
             loopback_count = sum(1 for c in connections if c.is_loopback)
             non_loopback_count = sum(1 for c in connections if not c.is_loopback)
@@ -93,7 +132,7 @@ class RuntimeNetworkMonitor:
                 total_connections=len(connections),
                 loopback_connections=loopback_count,
                 non_loopback_connections=non_loopback_count,
-                connections=connections
+                connections=connections,
             )
         except Exception as e:
             # Fallback if process net_connections restricted
