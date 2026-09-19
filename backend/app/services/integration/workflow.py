@@ -650,8 +650,6 @@ class CorrosionAuditWorkflow:
                 rag_query = f"{request.component_id} minimum wall thickness corrosion rate retirement limits SOP API 570"
                 retrieved_chunks, source_citations = await self.retriever.retrieve_with_citations(
                     query=rag_query,
-                    top_k=2,
-                    threshold=0.60,
                 )
 
                 # Convert to dictionary serialization for telemetry
