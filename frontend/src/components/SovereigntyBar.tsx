@@ -90,7 +90,7 @@ export const SovereigntyBar: React.FC<SovereigntyBarProps> = ({
               <ShieldCheck size={14} className="airgap-icon" />
               <span className="airgap-label">SOVEREIGN: LOCAL (0 EXTERNAL)</span>
               <span className="airgap-live-indicator" title="Live Host Sockets Polling Active">
-                <span className="airgap-pulse-dot" />
+                <span className="airgap-static-dot" />
               </span>
             </>
           ) : (

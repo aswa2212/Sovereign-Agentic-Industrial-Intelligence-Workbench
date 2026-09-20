@@ -25,9 +25,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Approved demonstrator sample fixture SHA-256 (corrosion_inspection_c101.pdf)
-DEMO_C101_PDF_SHA256 = "30dfb6cc4472edd29002b273018f57c506153f4cdb0ecdaba18e2f43f3613cf8"
-
 
 # ── Alias Dictionaries for Flexible Header Matching ─────────────────────────
 
@@ -118,13 +115,13 @@ class EngineeringEvidence(BaseModel):
     selected_measurement: Optional[ExtractedMeasurement] = Field(default=None, description="Critical minimum measurement selected")
 
     nominal_thickness_mm: Optional[float] = Field(default=None, description="Baseline nominal thickness in mm")
-    nominal_thickness_source: str = Field(default="NONE", description="Source of nominal thickness (DOCUMENT_TABLE, DOCUMENT_TEXT, DEMO_PRESET, NONE)")
+    nominal_thickness_source: str = Field(default="NONE", description="Source of nominal thickness (DOCUMENT_TABLE, DOCUMENT_TEXT, NONE)")
     current_thickness_mm: Optional[float] = Field(default=None, description="Critical measured thickness in mm")
-    current_thickness_source: str = Field(default="NONE", description="Source of current thickness (DOCUMENT_TABLE, DOCUMENT_TEXT, DEMO_PRESET, NONE)")
+    current_thickness_source: str = Field(default="NONE", description="Source of current thickness (DOCUMENT_TABLE, DOCUMENT_TEXT, NONE)")
     elapsed_time_years: Optional[float] = Field(default=None, description="Elapsed operating time in years")
-    elapsed_time_source: str = Field(default="NONE", description="Source of elapsed time (USER, DOCUMENT, APPROVED_CONFIG, DEMO_PRESET, NONE)")
+    elapsed_time_source: str = Field(default="NONE", description="Source of elapsed time (USER, DOCUMENT, NONE)")
     minimum_required_thickness_mm: Optional[float] = Field(default=None, description="Retirement limit in mm")
-    minimum_thickness_source: str = Field(default="NONE", description="Source of minimum required thickness (USER, DOCUMENT, APPROVED_CONFIG, DEMO_PRESET, NONE)")
+    minimum_thickness_source: str = Field(default="NONE", description="Source of minimum required thickness (USER, DOCUMENT, NONE)")
 
     source_filename: str = Field(..., description="Original filename of the ingested document")
     source_sha256: str = Field(..., description="Cryptographic SHA-256 hash of original document")
@@ -195,7 +192,6 @@ class EngineeringEvidenceExtractor:
         user_elapsed_years: Optional[float] = None,
         user_min_thickness: Optional[float] = None,
         vision_tags: Optional[List[str]] = None,
-        is_demo_preset: bool = False,
         user_equipment_id: Optional[str] = None,
         user_elapsed_time_years: Optional[float] = None,
         user_minimum_required_thickness_mm: Optional[float] = None,
@@ -260,7 +256,7 @@ class EngineeringEvidenceExtractor:
                 evidence.equipment_id_source = "USER"
             elif doc_equipment_id:
                 clean_doc = doc_equipment_id.strip().upper()
-                if clean_user != clean_doc and not (is_demo_preset and clean_user == "C-101"):
+                if clean_user != clean_doc:
                     evidence.conflict_detected = True
                     evidence.conflict_details = (
                         f"User specified equipment tag '{clean_user}' but uploaded document specifies '{clean_doc}' "
@@ -348,10 +344,6 @@ class EngineeringEvidenceExtractor:
             if doc_elapsed is not None and doc_elapsed > 0:
                 evidence.elapsed_time_years = doc_elapsed
                 evidence.elapsed_time_source = "DOCUMENT"
-            # 3. Approved demo preset or verified demo fixture ONLY (equipment_id alone must NEVER activate demo defaults)
-            elif is_demo_preset or norm_doc.sha256 == DEMO_C101_PDF_SHA256:
-                evidence.elapsed_time_years = 5.0
-                evidence.elapsed_time_source = "DEMO_PRESET" if is_demo_preset else "APPROVED_CONFIG"
             else:
                 evidence.elapsed_time_years = None
                 evidence.elapsed_time_source = "NONE"
@@ -367,10 +359,6 @@ class EngineeringEvidenceExtractor:
             if doc_min_t is not None and doc_min_t > 0:
                 evidence.minimum_required_thickness_mm = doc_min_t
                 evidence.minimum_thickness_source = "DOCUMENT"
-            # 3. Approved demo preset or verified demo fixture ONLY (equipment_id alone must NEVER activate demo defaults)
-            elif is_demo_preset or norm_doc.sha256 == DEMO_C101_PDF_SHA256:
-                evidence.minimum_required_thickness_mm = 8.0
-                evidence.minimum_thickness_source = "DEMO_PRESET" if is_demo_preset else "APPROVED_CONFIG"
             else:
                 evidence.minimum_required_thickness_mm = None
                 evidence.minimum_thickness_source = "NONE"
@@ -603,7 +591,33 @@ class EngineeringEvidenceExtractor:
         self, norm_doc: NormalizedDocument, measurements: List[ExtractedMeasurement]
     ) -> Optional[float]:
         """Extract elapsed operating interval in years from dates or text."""
-        # 1. Check header year differences
+        # 1. Check table columns with two dates (e.g. Previous_Date and Inspection_Date)
+        for table in norm_doc.tables:
+            prev_col = _find_column_index(table.headers, ["previous date", "previous_date", "baseline date", "baseline_date", "initial date", "initial_date", "prev date", "prev_date", "date previous", "date_previous"])
+            curr_col = _find_column_index(table.headers, ["inspection date", "inspection_date", "current date", "current_date", "actual date", "actual_date", "date measured", "date_measured", "reading date", "reading_date", "date"])
+            if prev_col is not None and curr_col is not None and table.rows:
+                for row in table.rows:
+                    if len(row) > max(prev_col, curr_col):
+                        p_str, c_str = str(row[prev_col]), str(row[curr_col])
+                        p_match = re.search(r"\b(20\d\d)(?:-(\d{1,2})-(\d{1,2}))?\b", p_str)
+                        c_match = re.search(r"\b(20\d\d)(?:-(\d{1,2})-(\d{1,2}))?\b", c_str)
+                        if p_match and c_match:
+                            try:
+                                if p_match.group(2) and c_match.group(2):
+                                    from datetime import date
+                                    d1 = date(int(p_match.group(1)), int(p_match.group(2)), int(p_match.group(3) or 1))
+                                    d2 = date(int(c_match.group(1)), int(c_match.group(2)), int(c_match.group(3) or 1))
+                                    days = (d2 - d1).days
+                                    if days > 0:
+                                        return round(days / 365.25, 2)
+                                else:
+                                    diff = float(int(c_match.group(1)) - int(p_match.group(1)))
+                                    if diff > 0:
+                                        return diff
+                            except Exception:
+                                pass
+
+        # 2. Check header year differences
         for table in norm_doc.tables:
             dates = self._inspect_headers_for_dates(table.headers)
             if dates["baseline_year"] and dates["current_year"]:
@@ -614,7 +628,7 @@ class EngineeringEvidenceExtractor:
                 except ValueError:
                     pass
 
-        # 2. Check explicit regex in text: "elapsed time = X years", "interval of X years", "over X years"
+        # 3. Check explicit regex in text: "elapsed time = X years", "interval of X years", "over X years"
         full_text = ""
         for p in norm_doc.pages[:2]:
             full_text += " " + p.text

@@ -139,13 +139,15 @@ export function useAgentTask() {
       const summaryText =
         wfRes.summary ||
         wfRes.ocr_vision_summary?.summary ||
-        (wfRes.status === 'COMPLETED' ? 'Completed autonomous engineering workflow execution.' : '');
+        (wfRes.status === 'INSUFFICIENT_EVIDENCE'
+          ? 'Visual and document analysis succeeded. Engineering calculation is unavailable due to missing numerical thickness gauging evidence.'
+          : (wfRes.status === 'COMPLETED' ? 'Completed autonomous engineering workflow execution.' : ''));
 
       // Entirely replace state with the new response (do NOT merge with previous run)
       setState({
         isRunning: false,
         taskId: currentTaskId,
-        currentState: wfRes.status === 'COMPLETED' ? 'DELIVER' : 'FAILED',
+        currentState: (wfRes.status === 'COMPLETED' || wfRes.status === 'INSUFFICIENT_EVIDENCE') ? 'DELIVER' : 'FAILED',
         routePreview: wfRes.routing_decision || state.routePreview,
         trace: transitions.length > 0 ? transitions : [],
         deliverables: mappedDeliverables,
@@ -163,7 +165,7 @@ export function useAgentTask() {
         citations: mappedCitations,
         executionMode: mode,
         errors: wfRes.errors || [],
-        errorMessage: wfRes.status !== 'COMPLETED' ? (wfRes.errors?.[0] || 'Workflow execution failed') : null,
+        errorMessage: (wfRes.status === 'COMPLETED' || wfRes.status === 'INSUFFICIENT_EVIDENCE') ? null : (wfRes.errors?.[0] || 'Workflow execution failed'),
       });
 
       return wfRes;

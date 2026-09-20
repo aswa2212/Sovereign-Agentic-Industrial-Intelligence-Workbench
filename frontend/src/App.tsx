@@ -87,12 +87,16 @@ const AppContent: React.FC = () => {
   );
 };
 
+import { WorkbenchSessionProvider } from './context/WorkbenchSessionContext';
+
 export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
         <WorkbenchRuntimeProvider>
-          <AppContent />
+          <WorkbenchSessionProvider>
+            <AppContent />
+          </WorkbenchSessionProvider>
         </WorkbenchRuntimeProvider>
       </ToastProvider>
     </BrowserRouter>

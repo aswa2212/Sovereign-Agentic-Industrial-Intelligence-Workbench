@@ -145,12 +145,12 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
           ) : (
             <>
               <DataSourceBadge
-                source={hasArtifacts ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
-                label={hasArtifacts ? (isLive ? 'GENERATED LIVE' : 'DEMO ARTIFACT') : 'AWAITING RELEASE'}
+                source={hasArtifacts ? 'LIVE' : 'FALLBACK'}
+                label={hasArtifacts ? 'VERIFIED DELIVERABLES' : (!taskId ? 'NO ACTIVE TASK' : 'AWAITING RELEASE')}
               />
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-primary btn-sm"
                 onClick={() => handleGenerate(['docx', 'xlsx'])}
                 disabled={isGenerating}
                 title="Compile publication-ready DOCX and XLSX deliverables"
@@ -186,7 +186,7 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
       <div className="panel-body-scroll">
         {isVisionOnly && currentArtifacts.length === 0 ? (
           <div className="empty-panel-state vision-empty-deliverables">
-            <CheckCircle2 size={28} className="empty-icon" style={{ color: 'var(--accent-color, #38bdf8)', opacity: 0.9 }} />
+            <CheckCircle2 size={28} className="empty-icon" style={{ color: 'var(--color-brand)', opacity: 0.9 }} />
             <div className="empty-title">NO ENGINEERING DELIVERABLES</div>
             <div className="empty-desc">
               Visual analysis completed. Engineering calculation and document generation were not part of this execution.
@@ -253,8 +253,8 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
                         <span>{sizeKb} KB</span>
                         <span>•</span>
                         <DataSourceBadge
-                          source={isLive ? 'LIVE' : 'DEMO'}
-                          label={isLive ? 'GENERATED LIVE' : 'DEMO ARTIFACT'}
+                          source="LIVE"
+                          label="GENERATED DELIVERABLE"
                           size="sm"
                         />
                       </div>
@@ -263,7 +263,7 @@ export const DeliverablesPanel: React.FC<DeliverablesPanelProps> = ({
 
                   <div className="deliv-hash-row">
                     <span className="hash-title">SHA-256 HASH:</span>
-                    <CopyableMono value={hash} truncateLength={28} label="Deliverable SHA-256" />
+                    <CopyableMono value={hash} truncateLength={16} label="Deliverable SHA-256" />
                   </div>
 
                   <div className="deliv-card-actions">

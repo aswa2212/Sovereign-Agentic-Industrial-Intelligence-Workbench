@@ -70,10 +70,6 @@ class CorrosionAuditWorkflowRequest(BaseModel):
         default=WorkflowExecutionMode.DETERMINISTIC,
         description="Deterministic (reproducible test mode) or live local models",
     )
-    is_demo_preset: bool = Field(
-        default=False,
-        description="Explicit flag indicating C-101 demonstration preset execution",
-    )
     requested_formats: List[str] = Field(
         default=["docx", "xlsx"],
         description="Office deliverable formats to compile upon successful validation",
@@ -83,7 +79,7 @@ class CorrosionAuditWorkflowRequest(BaseModel):
         description="Optional custom task/correlation ID",
     )
     component_id: Optional[str] = Field(
-        default="C-101",
+        default=None,
         description="Equipment or circuit tag identifier",
     )
     elapsed_time_years: Optional[float] = Field(

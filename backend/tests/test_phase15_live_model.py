@@ -128,7 +128,7 @@ class TestPhase15ExecutionModes:
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
 
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, is_demo_preset=True)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, document_filename="P-201_UT_Wall_Survey_2026.csv")
         result = await wf.run(req)
 
         assert result.status == WorkflowStatus.COMPLETED
@@ -143,7 +143,7 @@ class TestPhase15ExecutionModes:
         mgr = ModelManager(backend=unhealthy_backend, tier_config=mock_tier_config)
 
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, document_filename="P-201_UT_Wall_Survey_2026.csv")
 
         # In LIVE mode, failing health check must raise IntegrationError / fail workflow
         result = await wf.run(req)
@@ -159,7 +159,11 @@ class TestPhase15ExecutionModes:
 
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
+        req = CorrosionAuditWorkflowRequest(
+            execution_mode=WorkflowExecutionMode.LIVE,
+            document_filename="corrosion_inspection_c101.pdf",
+            elapsed_time_years=5.0,
+        )
 
         result = await wf.run(req)
         assert result.status in (WorkflowStatus.FAILED, WorkflowStatus.VALIDATION_FAILED)
@@ -220,7 +224,7 @@ class TestPhase15StructuredOutputAndAudit:
 
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
         wf = CorrosionAuditWorkflow(model_manager=mgr, audit_service=audit_svc)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, is_demo_preset=True)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.LIVE, document_filename="P-201_UT_Wall_Survey_2026.csv")
 
         result = await wf.run(req)
         new_events = audit_svc.store.get_all_events()
@@ -234,7 +238,7 @@ class TestPhase15StructuredOutputAndAudit:
         mock_backend = MockInferenceBackend(always_healthy=True)
         mgr = ModelManager(backend=mock_backend, tier_config=mock_tier_config)
         wf = CorrosionAuditWorkflow(model_manager=mgr)
-        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, is_demo_preset=True)
+        req = CorrosionAuditWorkflowRequest(execution_mode=WorkflowExecutionMode.DETERMINISTIC, document_filename="P-201_UT_Wall_Survey_2026.csv")
 
         result = await wf.run(req)
         assert result.sovereignty_proof["status"] == "PASS"

@@ -82,7 +82,7 @@ async def test_a_model_role_coder_resolves_to_coder(mock_tier_config: TierConfig
     with patch.object(wf.router, "route", return_value=coder_decision):
         req = CorrosionAuditWorkflowRequest(
             objective="Audit thickness readings and generate code to calculate corrosion rate",
-            is_demo_preset=True,
+            document_filename="P-201_UT_Wall_Survey_2026.csv",
             execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         )
         result = await wf.run(req)
@@ -118,7 +118,7 @@ async def test_b_model_role_reasoning_resolves_to_reasoning(mock_tier_config: Ti
     with patch.object(wf.router, "route", return_value=reasoning_decision):
         req = CorrosionAuditWorkflowRequest(
             objective="Analyze metallurgical degradation mechanisms in crude distillation column",
-            is_demo_preset=True,
+            document_filename="P-201_UT_Wall_Survey_2026.csv",
             execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         )
         result = await wf.run(req)
@@ -154,7 +154,7 @@ async def test_c_model_role_vision_resolves_to_vision(mock_tier_config: TierConf
     with patch.object(wf.router, "route", return_value=vision_decision):
         req = CorrosionAuditWorkflowRequest(
             objective="Inspect P&ID schematic diagram for overhead condenser circuit",
-            is_demo_preset=True,
+            document_filename="P-201_UT_Wall_Survey_2026.csv",
             execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         )
         result = await wf.run(req)
@@ -191,7 +191,7 @@ async def test_d_missing_configured_role_fails_explicitly(tier_missing_coder: Ti
     with patch.object(wf.router, "route", return_value=coder_decision):
         req = CorrosionAuditWorkflowRequest(
             objective="Generate code for parsing piping specs",
-            is_demo_preset=True,
+            document_filename="P-201_UT_Wall_Survey_2026.csv",
             execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         )
         result = await wf.run(req)
@@ -233,7 +233,7 @@ async def test_e_missing_role_never_silently_resolves_to_reasoning(tier_missing_
     with patch.object(wf.router, "route", return_value=coder_decision):
         req = CorrosionAuditWorkflowRequest(
             objective="Generate code",
-            is_demo_preset=True,
+            document_filename="P-201_UT_Wall_Survey_2026.csv",
             execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         )
         result = await wf.run(req)

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ShieldAlert, Check, AlertCircle, Info, Lock } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Check, AlertCircle, Info, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { StructuredValidationReport, ValidationCheckItem } from '../types/agent';
 import { DataSourceBadge } from './DataSourceBadge';
 
@@ -48,6 +48,7 @@ export const ValidationGateFuseBox: React.FC<ValidationGateFuseBoxProps> = ({
   isRunning = false,
 }) => {
   const [selectedCheck, setSelectedCheck] = useState<ValidationCheckItem | null>(null);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const {
     hasReport,
@@ -59,8 +60,11 @@ export const ValidationGateFuseBox: React.FC<ValidationGateFuseBoxProps> = ({
     checks,
   } = evaluateValidationGate(report);
 
+  // Auto-expand if invariants failed (Tier 1 alert condition)
+  const showDetails = isExpanded || failedCount > 0;
+
   return (
-    <div className="fuse-box-container">
+    <div className={`fuse-box-container ${!showDetails ? 'is-compact-summary' : ''}`}>
       {/* Fuse Box Header */}
       <div className="fuse-box-header">
         <div className="fuse-box-title-group">
@@ -84,8 +88,8 @@ export const ValidationGateFuseBox: React.FC<ValidationGateFuseBoxProps> = ({
         <div className="fuse-box-badge-wrap">
           {hasReport && (
             <DataSourceBadge
-              source={isAllPassed ? 'LIVE' : 'DEMO'}
-              label={isAllPassed ? 'LIVE BACKEND VALIDATION' : 'DEMO VALIDATION'}
+              source="LIVE"
+              label="LIVE BACKEND VALIDATION"
               size="sm"
             />
           )}
@@ -121,8 +125,22 @@ export const ValidationGateFuseBox: React.FC<ValidationGateFuseBoxProps> = ({
               </>
             )}
           </span>
+
+          <button
+            type="button"
+            className="fuse-toggle-btn"
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={showDetails}
+            title={showDetails ? 'Collapse validation details' : 'Inspect validation details'}
+          >
+            <span>{showDetails ? 'Hide' : 'Inspect'}</span>
+            {showDetails ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
         </div>
       </div>
+
+      {showDetails && (
+        <div className="fuse-box-expand-body">
 
       {/* Case 1: Backend Provided Real Per-Check Results */}
       {hasReport && hasPerCheckDetail && checks.length > 0 && (
@@ -252,6 +270,8 @@ export const ValidationGateFuseBox: React.FC<ValidationGateFuseBoxProps> = ({
           <code>API 570 §7.1</code>
         </div>
       </div>
+        </div>
+      )}
     </div>
   );
 };

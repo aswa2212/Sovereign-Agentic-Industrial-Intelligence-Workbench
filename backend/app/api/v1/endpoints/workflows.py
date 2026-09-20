@@ -42,10 +42,9 @@ def get_workflow() -> CorrosionAuditWorkflow:
     response_model=CorrosionAuditWorkflowResult,
     summary="Execute Primary Refining Equipment Corrosion Audit Workflow",
     description=(
-        "Executes the full 11-stage integration pipeline from PDF ingestion to "
+        "Executes the full 11-stage integration pipeline from document ingestion to "
         "deterministic Office deliverables (.docx, .xlsx), hash-chained audit logging, "
-        "and sovereignty network verification. Supports both synthetic C-101 baseline "
-        "and user-uploaded inspection files."
+        "and sovereignty network verification for uploaded inspection files."
     ),
 )
 async def run_corrosion_audit_workflow(
@@ -55,7 +54,6 @@ async def run_corrosion_audit_workflow(
     ),
     component_id: Optional[str] = Form(default=None),
     mode: Optional[str] = Form(default="deterministic"),
-    is_demo: Optional[bool] = Form(default=False),
     formats: Optional[str] = Form(default="docx,xlsx"),
     elapsed_time_years: Optional[float] = Form(default=None),
     minimum_required_thickness_mm: Optional[float] = Form(default=None),
@@ -88,7 +86,6 @@ async def run_corrosion_audit_workflow(
         objective=objective or "Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note.",
         document_filename=filename,
         execution_mode=exec_mode,
-        is_demo_preset=is_demo or False,
         requested_formats=requested_formats,
         component_id=component_id,
         elapsed_time_years=elapsed_time_years,

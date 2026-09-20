@@ -1,0 +1,581 @@
+{
+  "benchmark_timestamp": "2026-09-19T17:19:04Z",
+  "target_model_role": "vision",
+  "configured_model_tag": "qwen2.5vl:3b",
+  "execution_mode": "live",
+  "total_samples": 10,
+  "successful_samples": 10,
+  "average_duration_ms": 14375.0,
+  "results": [
+    {
+      "category": "equipment",
+      "filename": "equipment_centrifugal_pump.png",
+      "relative_path": "data/vision_test/equipment/equipment_centrifugal_pump.png",
+      "sha256": "85d491c2eb982b030d01d63502e603e867f872c0c6dc8b9fe03ca5590ce02e3d",
+      "file_size_bytes": 18020,
+      "status": "SUCCESS",
+      "duration_ms": 11578.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "P-102A"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "P-102A",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 1,
+      "findings": [
+        {
+          "label": "P-102A",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "equipment tag on the drawing"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "equipment",
+      "filename": "equipment_heat_exchanger.png",
+      "relative_path": "data/vision_test/equipment/equipment_heat_exchanger.png",
+      "sha256": "4613ad3d70915c9bf2dd035ff5e84ff312859c23f229ceb0952717875f2b6ea6",
+      "file_size_bytes": 13225,
+      "status": "SUCCESS",
+      "duration_ms": 12719.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "E-104"
+      ],
+      "instrument_tags": [
+        "N1 (IN)",
+        "N2 (OUT)"
+      ],
+      "candidate_tags": [
+        "E-104",
+        "N1 (IN)",
+        "N2 (OUT)",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 3,
+      "findings": [
+        {
+          "label": "E-104",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Tagged on the shell of the heat exchanger"
+        },
+        {
+          "label": "N1 (IN)",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Tagged on the inlet side of the heat exchanger"
+        },
+        {
+          "label": "N2 (OUT)",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Tagged on the outlet side of the heat exchanger"
+        }
+      ],
+      "summary": "Equipment isolation benchmark for a shell and tube heat exchanger.",
+      "error": null
+    },
+    {
+      "category": "gauges",
+      "filename": "gauge_pressure_analog.png",
+      "relative_path": "data/vision_test/gauges/gauge_pressure_analog.png",
+      "sha256": "8e43792d19d3b05001370b19388de38f8a3b582ea6ef0f19f945473085058a23",
+      "file_size_bytes": 15337,
+      "status": "SUCCESS",
+      "duration_ms": 14985.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "C-101",
+        "P-101A"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "C-101",
+        "P-101A",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 5,
+      "findings": [
+        {
+          "label": "C-101",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "equipment tag on the drawing"
+        },
+        {
+          "label": "P-101A",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "equipment tag on the drawing"
+        },
+        {
+          "label": "PT-101",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "FT-202",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "TT-301",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "gauges",
+      "filename": "gauge_temperature_dial.png",
+      "relative_path": "data/vision_test/gauges/gauge_temperature_dial.png",
+      "sha256": "28a7e8fd5c41701c861c0db25056edf41cfde54264766b2f6ecb76470b952d80",
+      "file_size_bytes": 14141,
+      "status": "SUCCESS",
+      "duration_ms": 15390.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "C-101",
+        "P-101A"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "C-101",
+        "P-101A",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 6,
+      "findings": [
+        {
+          "label": "standardized tag string",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "indicated on the drawing"
+        },
+        {
+          "label": "standardized tag string",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "indicated on the drawing"
+        },
+        {
+          "label": "standardized tag string",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "indicated on the drawing"
+        },
+        {
+          "label": "standardized tag string",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "indicated on the drawing"
+        },
+        {
+          "label": "standardized tag string",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "indicated on the drawing"
+        },
+        {
+          "label": "standardized line_id string",
+          "type": "line_id",
+          "confidence": 0.95,
+          "evidence": "indicated on the drawing"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "nameplates",
+      "filename": "nameplate_pressure_vessel.png",
+      "relative_path": "data/vision_test/nameplates/nameplate_pressure_vessel.png",
+      "sha256": "8cba266e57455ae239fcf146bd6f02533d852c87ee227246060526cf96f5d670",
+      "file_size_bytes": 37864,
+      "status": "SUCCESS",
+      "duration_ms": 14078.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "V-301"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "V-301",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 4,
+      "findings": [
+        {
+          "label": "V-301",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Equipment tag on the nameplate"
+        },
+        {
+          "label": "PT-101",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Instrument tag on the nameplate"
+        },
+        {
+          "label": "FT-202",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Instrument tag on the nameplate"
+        },
+        {
+          "label": "TT-301",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Instrument tag on the nameplate"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "nameplates",
+      "filename": "nameplate_process_pump.png",
+      "relative_path": "data/vision_test/nameplates/nameplate_process_pump.png",
+      "sha256": "f6695be453c7e6ad1eaa7135a4fd00b80c30864aece9669514eb2457b19f571e",
+      "file_size_bytes": 28308,
+      "status": "SUCCESS",
+      "duration_ms": 14188.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "P-204B"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "P-204B",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 4,
+      "findings": [
+        {
+          "label": "P-204B",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Tag on the centrifugal process pump"
+        },
+        {
+          "label": "PT-101",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Tag on the pressure transmitter"
+        },
+        {
+          "label": "FT-202",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Tag on the flow transmitter"
+        },
+        {
+          "label": "TT-301",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Tag on the temperature transmitter"
+        }
+      ],
+      "summary": "Centrifugal Process Pump",
+      "error": null
+    },
+    {
+      "category": "pid",
+      "filename": "pid_distillation_column.png",
+      "relative_path": "data/vision_test/pid/pid_distillation_column.png",
+      "sha256": "f476b2f4c6ef3a34d7ddce48f1bc2d3679f376b998bc08f9ab03c606b11584c0",
+      "file_size_bytes": 20527,
+      "status": "SUCCESS",
+      "duration_ms": 15719.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "C-201",
+        "E-205"
+      ],
+      "instrument_tags": [
+        "TT-201",
+        "PT-201"
+      ],
+      "candidate_tags": [
+        "C-201",
+        "E-205",
+        "TT-201",
+        "PT-201",
+        "6\"-CRU-2001-CS150",
+        "10\"-VAP-2002-CS300"
+      ],
+      "findings_count": 5,
+      "findings": [
+        {
+          "label": "C-201",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Text label on the equipment"
+        },
+        {
+          "label": "TT-201",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Circle with 'TT-201' text inside"
+        },
+        {
+          "label": "PT-201",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "Circle with 'PT-201' text inside"
+        },
+        {
+          "label": "6\"-CRU-2001-CS150",
+          "type": "line_id",
+          "confidence": 0.95,
+          "evidence": "Line with '6\"-CRU-2001-CS150' text"
+        },
+        {
+          "label": "10\"-VAP-2002-CS300",
+          "type": "line_id",
+          "confidence": 0.95,
+          "evidence": "Line with '10\"-VAP-2002-CS300' text"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "pid",
+      "filename": "pid_partial_ambiguous.png",
+      "relative_path": "data/vision_test/pid/pid_partial_ambiguous.png",
+      "sha256": "46494bfbf0a49fcb2d4cbc0855555d1275187ef26c1f3da22a23e585f9ab317e",
+      "file_size_bytes": 11427,
+      "status": "SUCCESS",
+      "duration_ms": 13531.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "P-101A"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "P-101A",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 4,
+      "findings": [
+        {
+          "label": "P-101A",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "equipment tag on the drawing"
+        },
+        {
+          "label": "PT-101",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "FT-202",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "TT-301",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "tables",
+      "filename": "table_ndt_calibration_log.png",
+      "relative_path": "data/vision_test/tables/table_ndt_calibration_log.png",
+      "sha256": "97a5c808301573fad8f765db220c660c592c612a9a2863b319c0d37fcac71ed8",
+      "file_size_bytes": 21322,
+      "status": "SUCCESS",
+      "duration_ms": 15672.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "C-101",
+        "P-101A"
+      ],
+      "instrument_tags": [
+        "PT-101",
+        "FT-202",
+        "TT-301"
+      ],
+      "candidate_tags": [
+        "C-101",
+        "P-101A",
+        "PT-101",
+        "FT-202",
+        "TT-301",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 6,
+      "findings": [
+        {
+          "label": "C-101",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "equipment tag on the drawing"
+        },
+        {
+          "label": "P-101A",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "equipment tag on the drawing"
+        },
+        {
+          "label": "PT-101",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "FT-202",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "TT-301",
+          "type": "instrument_tag",
+          "confidence": 0.95,
+          "evidence": "instrument tag on the drawing"
+        },
+        {
+          "label": "10-CDU-0101-CS150",
+          "type": "line_id",
+          "confidence": 0.95,
+          "evidence": "line ID on the drawing"
+        }
+      ],
+      "summary": "High-level description of drawing contents and unit operation",
+      "error": null
+    },
+    {
+      "category": "tables",
+      "filename": "table_thickness_survey_scan.png",
+      "relative_path": "data/vision_test/tables/table_thickness_survey_scan.png",
+      "sha256": "0c1e5a9453e4bdd3362d199bdce20b6f83e6f3dca11a2de0036ffdb44099cff7",
+      "file_size_bytes": 36301,
+      "status": "SUCCESS",
+      "duration_ms": 15890.0,
+      "model_used": "qwen2.5vl:3b",
+      "equipment_tags": [
+        "CML-01",
+        "CML-02",
+        "CML-03",
+        "CML-04",
+        "CML-05"
+      ],
+      "instrument_tags": [
+        "CML-01",
+        "CML-02",
+        "CML-03",
+        "CML-04",
+        "CML-05"
+      ],
+      "candidate_tags": [
+        "CML-01",
+        "CML-02",
+        "CML-03",
+        "CML-04",
+        "CML-05",
+        "10-CDU-0101-CS150"
+      ],
+      "findings_count": 5,
+      "findings": [
+        {
+          "label": "CML-01",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Column V-401 Overhead Piping"
+        },
+        {
+          "label": "CML-02",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Column V-401 Overhead Piping"
+        },
+        {
+          "label": "CML-03",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Column V-401 Overhead Piping"
+        },
+        {
+          "label": "CML-04",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Column V-401 Overhead Piping"
+        },
+        {
+          "label": "CML-05",
+          "type": "equipment_tag",
+          "confidence": 0.95,
+          "evidence": "Column V-401 Overhead Piping"
+        }
+      ],
+      "summary": "NDT Ultrasonic thickness survey log for Column V-401 Overhead Piping",
+      "error": null
+    }
+  ]
+}

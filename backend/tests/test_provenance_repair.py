@@ -164,15 +164,17 @@ async def test_c_unrelated_document_insufficient_evidence(workflow: CorrosionAud
 
 
 @pytest.mark.asyncio
-async def test_d_explicit_c101_demo_preset(workflow: CorrosionAuditWorkflow):
+async def test_d_c101_fixture_execution(workflow: CorrosionAuditWorkflow):
     """
     TEST D:
-    Explicit C-101 demo preset.
-    Expected: Existing C-101 demo continues to work with is_demo_preset=True.
+    C-101 inspection test fixture execution.
+    Expected: Ingests C-101 fixture, calculates with user parameters, and produces deliverables.
     """
     req = CorrosionAuditWorkflowRequest(
         component_id="C-101",
-        is_demo_preset=True,
+        document_filename="corrosion_inspection_c101.pdf",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
     )
     result = await workflow.run(req, pdf_bytes=None)
@@ -388,7 +390,6 @@ async def test_j_non_demo_pdf_live_mode_no_pid_sample(workflow: CorrosionAuditWo
             elapsed_time_years=2.0,
             execution_mode=WorkflowExecutionMode.LIVE,
             document_filename="real_upload.pdf",
-            is_demo_preset=False,
         )
         result = await workflow.run(req, pdf_bytes=pdf_bytes)
 
@@ -399,7 +400,9 @@ async def test_j_non_demo_pdf_live_mode_no_pid_sample(workflow: CorrosionAuditWo
         vision_stage = next((s for s in result.stages if s.stage_name == "ocr_vision_analysis"), None)
         assert vision_stage is not None
         assert vision_stage.status in (StageStatus.SUCCESS, StageStatus.SKIPPED)
-        assert vision_stage.details.get("is_demo_fixture") is False
+        # Vision stage must not carry any synthetic fixture marker;
+        # it should process real uploaded document bytes.
+        assert vision_stage.details.get("source") != "demo_fixture"
 
         # 2. Non-visual upload (CSV) in LIVE mode -> must explicitly be SKIPPED
         req_csv = CorrosionAuditWorkflowRequest(
@@ -407,7 +410,6 @@ async def test_j_non_demo_pdf_live_mode_no_pid_sample(workflow: CorrosionAuditWo
             elapsed_time_years=2.0,
             execution_mode=WorkflowExecutionMode.LIVE,
             document_filename="inspection_data.csv",
-            is_demo_preset=False,
         )
         csv_bytes = b"Point,Location,Nominal_mm,Actual_mm\nPT-1,Shell,12.0,10.5\n"
         result_csv = await workflow.run(req_csv, pdf_bytes=csv_bytes)
@@ -435,7 +437,7 @@ async def test_k_non_demo_c101_no_dates_blocks_calculation(workflow: CorrosionAu
     # Unit level evidence check
     norm_doc = IngestionService().ingest_file(doc_k, "c101_nodates.csv").normalized_document
     assert norm_doc is not None
-    ev = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc, is_demo_preset=False)
+    ev = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc)
     assert ev.equipment_id == "C-101"
     assert ev.elapsed_time_years is None
     assert ev.elapsed_time_source == "NONE"
@@ -445,7 +447,6 @@ async def test_k_non_demo_c101_no_dates_blocks_calculation(workflow: CorrosionAu
     # Workflow level check
     req = CorrosionAuditWorkflowRequest(
         component_id="C-101",
-        is_demo_preset=False,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         document_filename="c101_nodates.csv",
     )
@@ -475,7 +476,6 @@ async def test_l_non_demo_c101_no_threshold_withholds_remaining_life(workflow: C
     ev = EngineeringEvidenceExtractor().extract(
         norm_doc=norm_doc,
         user_elapsed_years=4.0,
-        is_demo_preset=False,
     )
     assert ev.equipment_id == "C-101"
     assert ev.minimum_required_thickness_mm is None
@@ -487,7 +487,6 @@ async def test_l_non_demo_c101_no_threshold_withholds_remaining_life(workflow: C
     req = CorrosionAuditWorkflowRequest(
         component_id="C-101",
         elapsed_time_years=4.0,
-        is_demo_preset=False,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         document_filename="c101_nothreshold.csv",
     )
@@ -522,7 +521,7 @@ async def test_m_filename_p205_body_p204_selects_p204(workflow: CorrosionAuditWo
     norm_doc = IngestionService().ingest_file(doc_m, "P-205_preliminary.csv").normalized_document
     assert norm_doc is not None
 
-    ev = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc, is_demo_preset=False)
+    ev = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc)
     assert ev.equipment_id == "P-204"
     assert ev.equipment_id_source == "DOCUMENT_BODY"
     assert ev.conflict_detected is False
@@ -545,7 +544,7 @@ async def test_m_filename_p205_body_p204_selects_p204(workflow: CorrosionAuditWo
             page_number=1,
         ),
     )]
-    ev_pdf = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc_pdf, is_demo_preset=False)
+    ev_pdf = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc_pdf)
     assert ev_pdf.equipment_id == "P-204"
     assert ev_pdf.equipment_id_source == "DOCUMENT_BODY"
     assert ev_pdf.conflict_detected is False
@@ -570,7 +569,7 @@ async def test_n_strong_document_evidence_conflict_stops_pipeline(workflow: Corr
     norm_doc = IngestionService().ingest_file(doc_n, "inspection_survey.csv").normalized_document
     assert norm_doc is not None
 
-    ev = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc, is_demo_preset=False)
+    ev = EngineeringEvidenceExtractor().extract(norm_doc=norm_doc)
     assert ev.conflict_detected is True
     assert "P-204" in (ev.conflict_details or "")
     assert "P-205" in (ev.conflict_details or "")

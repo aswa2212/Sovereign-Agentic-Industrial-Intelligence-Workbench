@@ -97,8 +97,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
 
         <div className="panel-header-badges">
           <DataSourceBadge
-            source={hasCitations ? (isLive ? 'LIVE' : 'DEMO') : 'FALLBACK'}
-            label={hasCitations ? (isLive ? 'LIVE LOCAL CORPUS' : 'DEMO — SYNTHETIC CORPUS') : 'NO EVIDENCE LOADED'}
+            source={hasCitations ? (isLive ? 'LIVE' : 'FALLBACK') : 'FALLBACK'}
+            label={hasCitations ? (isLive ? 'LIVE LOCAL CORPUS' : 'LOCAL CORPUS') : 'NO EVIDENCE LOADED'}
           />
           {onToggleFocus && (
             <button
@@ -221,14 +221,66 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
         )}
 
         {/* TAB 2: Calculations & Engineering Assessment */}
-        {activeTab === 'calculations' && (
-          <div className="evidence-card calculation-assessment-card" id="calculation-assessment-card">
-            <div className="evidence-card-header">
-              <div className="card-header-left">
-                <Calculator size={14} className="accent-icon" />
-                <span className="card-heading">ENGINEERING CALCULATION &amp; ASSESSMENT</span>
+        {activeTab === 'calculations' && (() => {
+          if (!calculation) {
+            const hasVisualFindings = Boolean(
+              ocrVisionSummary &&
+              ((ocrVisionSummary.findings_count && ocrVisionSummary.findings_count > 0) ||
+               (ocrVisionSummary.findings && ocrVisionSummary.findings.length > 0) ||
+               (ocrVisionSummary.equipment_tags && ocrVisionSummary.equipment_tags.length > 0))
+            );
+
+            return (
+              <div className="evidence-card calculation-assessment-card" id="calculation-assessment-card">
+                <div className="evidence-card-header">
+                  <div className="card-header-left">
+                    <Calculator size={14} className="accent-icon" />
+                    <span className="card-heading">ENGINEERING CALCULATION &amp; ASSESSMENT</span>
+                  </div>
+                  <span className={`badge-pill ${hasVisualFindings ? 'badge-warning' : 'badge-neutral'}`}>
+                    {isRunning ? 'CALCULATING...' : (hasVisualFindings ? 'UNAVAILABLE' : 'AWAITING INPUT')}
+                  </span>
+                </div>
+
+                {hasVisualFindings ? (
+                  <div style={{ padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-alert)', marginBottom: '0.5rem' }}>
+                      <AlertTriangle size={15} />
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>CORROSION RATE UNAVAILABLE</span>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0', lineHeight: 1.5 }}>
+                      Visual and document analysis completed successfully, but authoritative corrosion calculations cannot be evaluated because required thickness gauging data was not present in the document.
+                    </p>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--border-hairline)' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.35rem' }}>
+                        Missing evidence required for API 570 / ASME B31.3 calculation:
+                      </span>
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem', lineHeight: '1.6' }}>
+                        <li>Current measured thickness (t_actual)</li>
+                        <li>Nominal / initial baseline thickness (t_initial)</li>
+                        <li>Elapsed operating / inspection interval (Δt)</li>
+                        <li>Minimum required retirement thickness (t_min)</li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '2rem', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                      Awaiting document upload and pipeline execution to perform engineering calculations.
+                    </p>
+                  </div>
+                )}
               </div>
-              {calculation ? (
+            );
+          }
+
+          return (
+            <div className="evidence-card calculation-assessment-card" id="calculation-assessment-card">
+              <div className="evidence-card-header">
+                <div className="card-header-left">
+                  <Calculator size={14} className="accent-icon" />
+                  <span className="card-heading">ENGINEERING CALCULATION &amp; ASSESSMENT</span>
+                </div>
                 <span
                   className={`badge-pill ${
                     isSafe
@@ -248,95 +300,91 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
                     ? 'MONITOR SERVICE'
                     : calculation.margin_check?.status || calculation.remaining_life_status || 'ASSESSED'}
                 </span>
-              ) : (
-                <span className="badge-pill badge-neutral">
-                  {isRunning ? 'CALCULATING...' : '—'}
-                </span>
+              </div>
+
+              <div className="calc-metrics-grid">
+                {/* Corrosion Rate */}
+                <div className="calc-metric-cell cell-highlight">
+                  <span className="calc-metric-label">CORROSION RATE</span>
+                  <span className={`calc-metric-value ${calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null ? 'val-highlight' : 'val-muted'}`}>
+                    {calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null
+                      ? `${calculation.corrosion_rate_mm_per_year} mm/yr`
+                      : '—'}
+                  </span>
+                  <span className="calc-metric-sub">API 570 Short-Term</span>
+                </div>
+
+                {/* Remaining Service Life */}
+                <div className={`calc-metric-cell ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'cell-safe' : 'cell-warning') : ''}`}>
+                  <span className="calc-metric-label">REMAINING SERVICE LIFE</span>
+                  <span className={`calc-metric-value ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'val-success' : 'val-warning') : 'val-muted'}`}>
+                    {calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null
+                      ? `${calculation.remaining_life_years} yrs`
+                      : (calculation ? 'UNAVAILABLE' : '—')}
+                  </span>
+                  <span className="calc-metric-sub">To t_min limit</span>
+                </div>
+
+                {/* Total Metal Loss */}
+                <div className="calc-metric-cell">
+                  <span className="calc-metric-label">TOTAL METAL LOSS</span>
+                  <span className={`calc-metric-value ${calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null ? '' : 'val-muted'}`}>
+                    {calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null
+                      ? `${calculation.metal_loss_mm} mm`
+                      : '—'}
+                  </span>
+                  <span className="calc-metric-sub">t_nominal - t_actual</span>
+                </div>
+
+                {/* Structural Margin */}
+                <div className={`calc-metric-cell ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'cell-safe' : 'cell-critical') : ''}`}>
+                  <span className="calc-metric-label">STRUCTURAL MARGIN</span>
+                  <span className={`calc-metric-value ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'val-success' : 'val-critical') : 'val-muted'}`}>
+                    {calculation?.margin_check?.margin_mm !== undefined && calculation?.margin_check?.margin_mm !== null
+                      ? `${calculation.margin_check.margin_mm >= 0 ? '+' : ''}${calculation.margin_check.margin_mm} mm`
+                      : (calculation?.remaining_margin_mm !== undefined ? `${calculation.remaining_margin_mm} mm` : (calculation ? 'UNAVAILABLE' : '—'))}
+                  </span>
+                  <span className="calc-metric-sub">t_actual - t_required</span>
+                </div>
+
+                {/* Governing CML */}
+                <div className="calc-metric-cell">
+                  <span className="calc-metric-label">GOVERNING CML</span>
+                  <span className={`calc-metric-value ${calculation?.governing_cml || calculation?.component_id ? '' : 'val-muted'}`}>
+                    {calculation?.governing_cml || calculation?.component_id || (calculation ? 'UNAVAILABLE' : '—')}
+                  </span>
+                  <span className="calc-metric-sub">Critical inspection point</span>
+                </div>
+
+                {/* Assessment Status */}
+                <div className="calc-metric-cell">
+                  <span className="calc-metric-label">ASSESSMENT STATUS</span>
+                  <span className={`calc-metric-value ${
+                    isSafe
+                      ? 'val-success'
+                      : isRetire
+                      ? 'val-critical'
+                      : isMonitor
+                      ? 'val-warning'
+                      : 'val-muted'
+                  }`}>
+                    {calculation?.margin_check?.status || calculation?.remaining_life_status || (calculation ? 'UNAVAILABLE' : '—')}
+                  </span>
+                  <span className="calc-metric-sub">Integrity disposition</span>
+                </div>
+              </div>
+
+              {calculation && (
+                <div className="calc-details-footer">
+                  <span>Formula: <code>{calculation.formula_used || 'API 570: Cr = (t_initial - t_actual) / Δt'}</code></span>
+                  {calculation.previous_thickness_mm !== undefined && calculation.current_thickness_mm !== undefined && (
+                    <span>Baseline: <code>{calculation.previous_thickness_mm} mm → {calculation.current_thickness_mm} mm</code> ({calculation.elapsed_time_years ?? '—'} yrs)</span>
+                  )}
+                </div>
               )}
             </div>
-
-            <div className="calc-metrics-grid">
-              {/* Corrosion Rate */}
-              <div className="calc-metric-cell cell-highlight">
-                <span className="calc-metric-label">CORROSION RATE</span>
-                <span className={`calc-metric-value ${calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null ? 'val-highlight' : 'val-muted'}`}>
-                  {calculation?.corrosion_rate_mm_per_year !== undefined && calculation?.corrosion_rate_mm_per_year !== null
-                    ? `${calculation.corrosion_rate_mm_per_year} mm/yr`
-                    : '—'}
-                </span>
-                <span className="calc-metric-sub">API 570 Short-Term</span>
-              </div>
-
-              {/* Remaining Service Life */}
-              <div className={`calc-metric-cell ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'cell-safe' : 'cell-warning') : ''}`}>
-                <span className="calc-metric-label">REMAINING SERVICE LIFE</span>
-                <span className={`calc-metric-value ${calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null ? (calculation.remaining_life_years > 2 ? 'val-success' : 'val-warning') : 'val-muted'}`}>
-                  {calculation?.remaining_life_years !== undefined && calculation?.remaining_life_years !== null
-                    ? `${calculation.remaining_life_years} yrs`
-                    : (calculation ? 'UNAVAILABLE' : '—')}
-                </span>
-                <span className="calc-metric-sub">To t_min limit</span>
-              </div>
-
-              {/* Total Metal Loss */}
-              <div className="calc-metric-cell">
-                <span className="calc-metric-label">TOTAL METAL LOSS</span>
-                <span className={`calc-metric-value ${calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null ? '' : 'val-muted'}`}>
-                  {calculation?.metal_loss_mm !== undefined && calculation?.metal_loss_mm !== null
-                    ? `${calculation.metal_loss_mm} mm`
-                    : '—'}
-                </span>
-                <span className="calc-metric-sub">t_nominal - t_actual</span>
-              </div>
-
-              {/* Structural Margin */}
-              <div className={`calc-metric-cell ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'cell-safe' : 'cell-critical') : ''}`}>
-                <span className="calc-metric-label">STRUCTURAL MARGIN</span>
-                <span className={`calc-metric-value ${calculation?.margin_check?.margin_mm !== undefined ? (calculation.margin_check.margin_mm >= 0 ? 'val-success' : 'val-critical') : 'val-muted'}`}>
-                  {calculation?.margin_check?.margin_mm !== undefined && calculation?.margin_check?.margin_mm !== null
-                    ? `${calculation.margin_check.margin_mm >= 0 ? '+' : ''}${calculation.margin_check.margin_mm} mm`
-                    : (calculation?.remaining_margin_mm !== undefined ? `${calculation.remaining_margin_mm} mm` : (calculation ? 'UNAVAILABLE' : '—'))}
-                </span>
-                <span className="calc-metric-sub">t_actual - t_required</span>
-              </div>
-
-              {/* Governing CML */}
-              <div className="calc-metric-cell">
-                <span className="calc-metric-label">GOVERNING CML</span>
-                <span className={`calc-metric-value ${calculation?.governing_cml || calculation?.component_id ? '' : 'val-muted'}`}>
-                  {calculation?.governing_cml || calculation?.component_id || (calculation ? 'UNAVAILABLE' : '—')}
-                </span>
-                <span className="calc-metric-sub">Critical inspection point</span>
-              </div>
-
-              {/* Assessment Status */}
-              <div className="calc-metric-cell">
-                <span className="calc-metric-label">ASSESSMENT STATUS</span>
-                <span className={`calc-metric-value ${
-                  isSafe
-                    ? 'val-success'
-                    : isRetire
-                    ? 'val-critical'
-                    : isMonitor
-                    ? 'val-warning'
-                    : 'val-muted'
-                }`}>
-                  {calculation?.margin_check?.status || calculation?.remaining_life_status || (calculation ? 'UNAVAILABLE' : '—')}
-                </span>
-                <span className="calc-metric-sub">Integrity disposition</span>
-              </div>
-            </div>
-
-            {calculation && (
-              <div className="calc-details-footer">
-                <span>Formula: <code>{calculation.formula_used || 'API 570: Cr = (t_initial - t_actual) / Δt'}</code></span>
-                {calculation.previous_thickness_mm !== undefined && calculation.current_thickness_mm !== undefined && (
-                  <span>Baseline: <code>{calculation.previous_thickness_mm} mm → {calculation.current_thickness_mm} mm</code> ({calculation.elapsed_time_years ?? '—'} yrs)</span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB 3: Visual OCR / VLM Findings */}
         {activeTab === 'ocr' && (
@@ -466,7 +514,7 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({
                             {citation.similarity_score !== undefined && citation.similarity_score !== null && (
                               <span><strong>Cosine Score:</strong> <code>{typeof citation.similarity_score === 'number' ? citation.similarity_score.toFixed(4) : citation.similarity_score}</code></span>
                             )}
-                            <span className="badge-pill badge-success">
+                            <span className="badge-pill badge-neutral">
                               <CheckCircle2 size={10} />
                               <span>PROVENANCE: LOCAL ON-PREM CORPUS</span>
                             </span>

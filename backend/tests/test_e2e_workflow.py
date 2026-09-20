@@ -70,7 +70,9 @@ async def test_e2e_c101_northstar_workflow_success(workflow_instance):
     request = CorrosionAuditWorkflowRequest(
         objective="Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note.",
         component_id="C-101",
-        is_demo_preset=True,
+        document_filename="corrosion_inspection_c101.pdf",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx"],
     )
@@ -164,6 +166,8 @@ async def test_e2e_c101_with_uploaded_bytes(workflow_instance, c101_sample_bytes
     request = CorrosionAuditWorkflowRequest(
         objective="Analyze C-101 inspection sheet and calculate corrosion metrics.",
         component_id="C-101",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx"],
     )
@@ -180,7 +184,9 @@ async def test_e2e_c101_with_pptx_format(workflow_instance):
     request = CorrosionAuditWorkflowRequest(
         objective="Audit C-101 overhead corrosion and compile briefing deck.",
         component_id="C-101",
-        is_demo_preset=True,
+        document_filename="corrosion_inspection_c101.pdf",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx", "pptx"],
     )
@@ -240,7 +246,9 @@ async def test_e2e_vision_degraded_fallback(workflow_instance):
     wf = CorrosionAuditWorkflow(ocr_engine=UnavailableOCREngine(provider=MockOCRProvider()))
     request = CorrosionAuditWorkflowRequest(
         component_id="C-101",
-        is_demo_preset=True,
+        document_filename="corrosion_inspection_c101.pdf",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx"],
     )
@@ -274,7 +282,9 @@ async def test_e2e_validation_gate_fails_closed(workflow_instance):
     wf = CorrosionAuditWorkflow(validation_service=FailingValidationService())
     request = CorrosionAuditWorkflowRequest(
         component_id="C-101",
-        is_demo_preset=True,
+        document_filename="corrosion_inspection_c101.pdf",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx"],
     )
@@ -303,15 +313,17 @@ def test_api_workflows_health(api_client):
     assert data["subsystems"]["audit_service"] is True
 
 
-def test_api_post_corrosion_audit_workflow(api_client):
+def test_api_post_corrosion_audit_workflow(api_client, c101_sample_bytes):
     """Test 9: POST /api/v1/workflows/corrosion-audit executes full workflow via REST."""
     resp = api_client.post(
         "/api/v1/workflows/corrosion-audit",
+        files={"file": ("corrosion_inspection_c101.pdf", c101_sample_bytes, "application/pdf")},
         data={
             "mode": "deterministic",
             "component_id": "C-101",
             "formats": "docx,xlsx",
-            "is_demo": "true",
+            "elapsed_time_years": 5.0,
+            "minimum_required_thickness_mm": 8.0,
         },
     )
     assert resp.status_code == 200
@@ -323,12 +335,18 @@ def test_api_post_corrosion_audit_workflow(api_client):
     assert data["audit_summary"]["ledger_valid"] is True
 
 
-def test_api_get_workflow_result(api_client):
+def test_api_get_workflow_result(api_client, c101_sample_bytes):
     """Test 10: GET /api/v1/workflows/{id} retrieves prior execution results."""
     # First execute a workflow
     post_resp = api_client.post(
         "/api/v1/workflows/corrosion-audit",
-        data={"mode": "deterministic", "formats": "docx", "is_demo": "true"},
+        files={"file": ("corrosion_inspection_c101.pdf", c101_sample_bytes, "application/pdf")},
+        data={
+            "mode": "deterministic",
+            "formats": "docx",
+            "elapsed_time_years": 5.0,
+            "minimum_required_thickness_mm": 8.0,
+        },
     )
     assert post_resp.status_code == 200
     workflow_id = post_resp.json()["workflow_id"]
@@ -350,9 +368,11 @@ def test_api_post_json_workflow(api_client):
     payload = {
         "objective": "Audit thickness readings against MRPL piping specification for C-101 via JSON trigger",
         "component_id": "C-101",
+        "document_filename": "corrosion_inspection_c101.pdf",
+        "elapsed_time_years": 5.0,
+        "minimum_required_thickness_mm": 8.0,
         "execution_mode": "deterministic",
         "requested_formats": ["docx"],
-        "is_demo_preset": True,
     }
     resp = api_client.post("/api/v1/workflows/corrosion-audit/json", json=payload)
     assert resp.status_code == 200
@@ -361,29 +381,30 @@ def test_api_post_json_workflow(api_client):
     assert len(data["deliverables"]) == 1
 
 
-def test_api_post_corrosion_audit_workflow_with_uploaded_image(api_client):
-    """Test 12: POST /api/v1/workflows/corrosion-audit executes successfully with uploaded image (pid_sample.png)."""
+def test_api_post_corrosion_audit_workflow_with_uploaded_csv(api_client):
+    """Test 12: POST /api/v1/workflows/corrosion-audit executes successfully with uploaded CSV."""
     settings = get_settings()
-    img_path = settings.project_root / "data" / "samples" / "pid_sample.png"
-    assert img_path.is_file(), f"Sample image not found at {img_path}"
-    img_bytes = img_path.read_bytes()
+    csv_path = settings.project_root / "data" / "samples" / "P-201_UT_Wall_Survey_2026.csv"
+    assert csv_path.is_file(), f"Sample CSV not found at {csv_path}"
+    csv_bytes = csv_path.read_bytes()
 
     resp = api_client.post(
         "/api/v1/workflows/corrosion-audit",
-        files={"file": ("pid_sample.png", img_bytes, "image/png")},
+        files={"file": ("P-201_UT_Wall_Survey_2026.csv", csv_bytes, "text/csv")},
         data={
-            "objective": "Inspect C-101 atmospheric column overheads thickness survey, calculate corrosion rate, and generate executive report.",
+            "objective": "Inspect P-201 thickness survey, calculate corrosion rate, and generate executive report.",
             "mode": "deterministic",
-            "component_id": "C-101",
+            "component_id": "P-201",
             "formats": "docx,xlsx",
-            "is_demo": "true",
+            "elapsed_time_years": 4.0,
+            "minimum_required_thickness_mm": 9.0,
         },
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "COMPLETED"
     assert data["workflow_id"] is not None
-    assert data["document_summary"]["filename"] == "pid_sample.png"
+    assert data["document_summary"]["filename"] == "P-201_UT_Wall_Survey_2026.csv"
     assert len(data["deliverables"]) == 2
     assert len(data["stages"]) == 11
     assert data["validation_result"]["valid"] is True
@@ -445,7 +466,9 @@ async def test_workflow_deliverables_isolation_across_runs(workflow_instance):
     req_corrosion = CorrosionAuditWorkflowRequest(
         objective="Audit thickness readings against MRPL piping specification, calculate corrosion rate, and generate executive approval note.",
         component_id="C-101",
-        is_demo_preset=True,
+        document_filename="corrosion_inspection_c101.pdf",
+        elapsed_time_years=5.0,
+        minimum_required_thickness_mm=8.0,
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
         requested_formats=["docx", "xlsx"],
         task_id="task_corr_alpha",

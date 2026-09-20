@@ -84,7 +84,7 @@ logger = logging.getLogger(__name__)
 
 class CorrosionAuditWorkflow:
     """
-    Primary end-to-end integration orchestrator for the C-101 refining equipment corrosion audit.
+    Primary end-to-end integration orchestrator for the refining equipment corrosion audit.
     """
 
     def __init__(
@@ -192,21 +192,7 @@ class CorrosionAuditWorkflow:
                 filename = request.document_filename
 
                 if raw_pdf is None:
-                    if request.is_demo_preset:
-                        # Explicit demo preset path: allow loading bundled C-101 sample
-                        filename = filename or "corrosion_inspection_c101.pdf"
-                        sample_path = (
-                            self.settings.project_root
-                            / "data"
-                            / "samples"
-                            / filename
-                        )
-                        if not sample_path.is_file():
-                            raise DocumentIngestionStageError(
-                                f"Specified demo document '{filename}' was not found at {sample_path}."
-                            )
-                        raw_pdf = sample_path.read_bytes()
-                    elif filename:
+                    if filename:
                         sample_path = (
                             self.settings.project_root
                             / "data"
@@ -220,7 +206,7 @@ class CorrosionAuditWorkflow:
                         raw_pdf = sample_path.read_bytes()
                     else:
                         raise DocumentIngestionStageError(
-                            "Document input required: No document uploaded and is_demo_preset is False."
+                            "Document input required: No document uploaded."
                         )
                 elif not filename:
                     filename = "uploaded_inspection_document.pdf"
@@ -241,27 +227,7 @@ class CorrosionAuditWorkflow:
                     user_equipment_id=request.component_id,
                     user_elapsed_time_years=request.elapsed_time_years,
                     user_minimum_required_thickness_mm=request.minimum_required_thickness_mm,
-                    is_demo_preset=request.is_demo_preset,
                 )
-
-                if request.is_demo_preset:
-                    if evidence.nominal_thickness_mm is None:
-                        evidence.nominal_thickness_mm = 12.0
-                        evidence.nominal_thickness_source = "DEMO_PRESET"
-                    if evidence.current_thickness_mm is None:
-                        evidence.current_thickness_mm = 10.1
-                        evidence.current_thickness_source = "DEMO_PRESET"
-                    if evidence.elapsed_time_years is None:
-                        evidence.elapsed_time_years = 5.0
-                        evidence.elapsed_time_source = "DEMO_PRESET"
-                    if evidence.minimum_required_thickness_mm is None:
-                        evidence.minimum_required_thickness_mm = 8.0
-                        evidence.minimum_thickness_source = "DEMO_PRESET"
-                    if evidence.equipment_id is None:
-                        evidence.equipment_id = "C-101"
-                        evidence.equipment_id_source = "DEMO_PRESET"
-                    evidence.can_calculate_corrosion_rate = True
-                    evidence.can_calculate_remaining_life = True
 
                 evidence_obj = evidence
                 evidence_dict = evidence.model_dump()
@@ -327,32 +293,15 @@ class CorrosionAuditWorkflow:
 
                     # Determine image bytes for visual analysis (Finding 1: strict provenance)
                     img_bytes: Optional[bytes] = None
-                    is_demo_fixture = False
 
-                    if request.is_demo_preset:
-                        # Demo preset ONLY: bundled sample image may be used with explicit DEMO provenance
-                        pid_sample_path = self.settings.project_root / "data" / "samples" / "pid_sample.png"
-                        if pid_sample_path.is_file():
-                            img_bytes = pid_sample_path.read_bytes()
-                        else:
-                            img = Image.new("RGB", (400, 300), color=(255, 255, 255))
-                            buf = io.BytesIO()
-                            img.save(buf, format="PNG")
-                            img_bytes = buf.getvalue()
-                        is_demo_fixture = True
-                        prov = DocumentProvenance(
-                            source_filename="pid_sample.png (DEMO PRESET)",
-                            source_sha256="demo_preset_fixture",
-                            page_number=1,
-                        )
-                    elif pdf_bytes and any(filename.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg")):
+                    if raw_pdf and any(filename.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg")):
                         # CASE 1: Uploaded file is already an image (.png/.jpg/.jpeg)
-                        img_bytes = pdf_bytes
-                    elif pdf_bytes and filename.lower().endswith(".pdf"):
+                        img_bytes = raw_pdf
+                    elif raw_pdf and filename.lower().endswith(".pdf"):
                         # CASE 2: Uploaded file is PDF -> render first page using pypdfium2
                         try:
                             import pypdfium2
-                            pdf_doc = pypdfium2.PdfDocument(pdf_bytes)
+                            pdf_doc = pypdfium2.PdfDocument(raw_pdf)
                             if len(pdf_doc) > 0:
                                 pil_img = pdf_doc[0].render(scale=1.5).to_pil()
                                 buf = io.BytesIO()
@@ -379,7 +328,6 @@ class CorrosionAuditWorkflow:
                             "summary": vlm_res.summary,
                             "status": vlm_res.status,
                             "degraded": False,
-                            "is_demo_fixture": is_demo_fixture,
                         }
                         self._safe_audit(
                             AuditEventType.MODEL_INVOKED,
@@ -391,7 +339,6 @@ class CorrosionAuditWorkflow:
                                 "findings_count": len(vlm_res.findings),
                                 "equipment_tags": vlm_res.equipment_tags,
                                 "instrument_tags": vlm_res.instrument_tags,
-                                "is_demo_fixture": is_demo_fixture,
                             },
                         )
                         st_vision.status = StageStatus.SUCCESS
@@ -411,7 +358,6 @@ class CorrosionAuditWorkflow:
                             "instrument_tags": [],
                             "summary": f"Vision analysis skipped: {skip_reason}. Engineering evidence path active.",
                             "degraded": False,
-                            "is_demo_fixture": False,
                         }
                         st_vision.status = StageStatus.SKIPPED
                 else:

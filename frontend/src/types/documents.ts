@@ -17,7 +17,6 @@ export interface DocumentIngestionResult {
   extraction_summary: ExtractionSummary;
   created_at?: string;
   status?: string;
-  is_demo_preset?: boolean;
   evidence?: Record<string, any>;
   is_drawing?: boolean;
   document_id?: string;

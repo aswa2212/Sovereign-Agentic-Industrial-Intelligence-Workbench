@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { DocumentIngestionResult } from '../types/documents';
 import { documentService } from '../services/documents';
 import {
@@ -36,30 +36,6 @@ interface ThicknessSurveyRow {
   date_measured: string;
 }
 
-const SAMPLE_SURVEY_DATA: ThicknessSurveyRow[] = [
-  { cml_tag: 'CML-1', location_desc: 'Column Shell Ring 1 (Top Head Nozzle)', nominal_mm: 12.0, actual_mm: 11.45, loss_mm: 0.55, date_measured: '2026-03-12' },
-  { cml_tag: 'CML-2', location_desc: 'Column Shell Ring 3 (Reflux Inlet)', nominal_mm: 12.0, actual_mm: 10.90, loss_mm: 1.10, date_measured: '2026-03-12' },
-  { cml_tag: 'CML-3', location_desc: 'Column Shell Ring 5 (Tray 12 Vapor Zone)', nominal_mm: 12.0, actual_mm: 10.40, loss_mm: 1.60, date_measured: '2026-03-12' },
-  { cml_tag: 'CML-4', location_desc: 'Overhead Condenser Vapor Line Elbow E-02', nominal_mm: 12.0, actual_mm: 10.10, loss_mm: 1.90, date_measured: '2026-03-12' },
-];
-
-export const DEMO_C101_SHA256 = '30dfb6cc4472edd29002b273018f57c506153f4cdb0ecdaba18e2f43f3613cf8';
-
-export const isApprovedDemoPreset = (doc?: DocumentIngestionResult | null): boolean => {
-  if (!doc) return false;
-  if (doc.is_demo_preset === true) return true;
-  if (doc.sha256 === DEMO_C101_SHA256) return true;
-  const ev = (doc as any).evidence;
-  if (
-    ev?.elapsed_time_source === 'DEMO_PRESET' ||
-    ev?.minimum_thickness_source === 'DEMO_PRESET' ||
-    ev?.equipment_id_source === 'DEMO_PRESET'
-  ) {
-    return true;
-  }
-  return false;
-};
-
 export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   documents,
   onUploadSuccess,
@@ -79,6 +55,17 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [activeTab, setActiveTab] = useState<'survey' | 'params' | 'archive'>('survey');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync active preview and file input state with selectedDoc (handles Workbench dedicated reset)
+  useEffect(() => {
+    setActivePreviewDoc(selectedDoc || null);
+    if (!selectedDoc && fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    if (!selectedDoc) {
+      setActiveTab('survey');
+    }
+  }, [selectedDoc]);
 
   const handleFileChange = async (file: File) => {
     setIsUploading(true);
@@ -104,25 +91,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
   };
 
-  const isDemoFallback = !selectedDoc && !activePreviewDoc && Boolean(selectedEquipmentId);
-  const demoPresetDoc: DocumentIngestionResult | null = isDemoFallback
-    ? {
-        filename: `${selectedEquipmentId}_UT_Wall_Survey_2026.xlsx`,
-        status: 'completed' as const,
-        page_count: 1,
-        table_count: 1,
-        size_bytes: 48120,
-        sha256: DEMO_C101_SHA256,
-        is_demo_preset: true,
-        extraction_summary: 'Ultrasonic thickness survey gauging grid parsed.',
-        evidence: {
-          equipment_id: selectedEquipmentId,
-          measurements: [],
-        },
-      }
-    : null;
-
-  const activeDoc = selectedDoc || activePreviewDoc || demoPresetDoc;
+  const activeDoc = selectedDoc || activePreviewDoc || null;
 
   return (
     <div className="workbench-panel document-viewer-panel">
@@ -202,7 +171,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             </div>
             <div className="active-doc-hash-row">
               <span className="hash-label">SHA-256:</span>
-              <CopyableMono value={activeDoc.sha256} truncateLength={28} label="Document Digest" />
+              <CopyableMono value={activeDoc.sha256} truncateLength={16} label="Document Digest" />
             </div>
             <div className="active-doc-meta-row">
               <span>Pages: {activeDoc.page_count}</span>
@@ -260,7 +229,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             return (
               <div className="evidence-card survey-table-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
-                  No inspection survey loaded. Ingest an ultrasonic thickness survey or execute the C-101 demonstration preset to view gauging measurements.
+                  No inspection document loaded. Upload an ultrasonic thickness survey or engineering drawing to view gauging measurements.
                 </p>
               </div>
             );
@@ -269,7 +238,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           if (activeDoc.status === 'failed') {
             return (
               <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
-                <h3 style={{ color: 'var(--accent-danger, #ef4444)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
+                <h3 style={{ color: 'var(--color-alert)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
                   EXTRACTION UNAVAILABLE
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
@@ -283,7 +252,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           if (isDrawing) {
             return (
               <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
-                <h3 style={{ color: 'var(--accent-info, #38bdf8)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
+                <h3 style={{ color: 'var(--color-brand)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
                   P&amp;ID SCHEMATIC DETECTED
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
@@ -293,10 +262,9 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             );
           }
 
-          const isApprovedDemo = isApprovedDemoPreset(activeDoc);
           const rawMeasurements: any[] = (activeDoc as any).evidence?.measurements || [];
 
-          if (rawMeasurements.length === 0 && !isApprovedDemo) {
+          if (rawMeasurements.length === 0) {
             return (
               <div className="evidence-card survey-table-card" style={{ padding: '2rem', textAlign: 'center' }}>
                 <h3 style={{ color: 'var(--text-muted)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
@@ -309,27 +277,19 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             );
           }
 
-          const displayRows: ThicknessSurveyRow[] = rawMeasurements.length > 0
-            ? rawMeasurements.map((m: any) => ({
-                cml_tag: m.cml_tag || 'CML',
-                location_desc: m.location_desc || 'Inspection Point',
-                nominal_mm: m.nominal_thickness_mm ?? (activeDoc as any).evidence?.nominal_thickness_mm ?? 0,
-                actual_mm: m.measured_thickness_mm,
-                loss_mm: m.loss_mm ?? (m.nominal_thickness_mm ? Math.round((m.nominal_thickness_mm - m.measured_thickness_mm) * 100) / 100 : 0),
-                date_measured: m.measurement_date || '—',
-              }))
-            : (isApprovedDemo ? SAMPLE_SURVEY_DATA : []);
+          const displayRows: ThicknessSurveyRow[] = rawMeasurements.map((m: any) => ({
+            cml_tag: m.cml_tag || 'CML',
+            location_desc: m.location_desc || 'Inspection Point',
+            nominal_mm: m.nominal_thickness_mm ?? (activeDoc as any).evidence?.nominal_thickness_mm ?? 0,
+            actual_mm: m.measured_thickness_mm,
+            loss_mm: m.loss_mm ?? (m.nominal_thickness_mm ? Math.round((m.nominal_thickness_mm - m.measured_thickness_mm) * 100) / 100 : 0),
+            date_measured: m.measurement_date || '—',
+          }));
 
           const minActual = displayRows.length > 0 ? Math.min(...displayRows.map(r => r.actual_mm)) : 0;
 
           return (
             <div className="evidence-card survey-table-card">
-              {isApprovedDemo && rawMeasurements.length === 0 && (
-                <div style={{ padding: '0.5rem 1rem', background: 'rgba(56, 189, 248, 0.1)', borderBottom: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8' }}>DEMO PRESET: C-101 Corrosion Audit</span>
-                  <span className="badge-pill badge-neutral" style={{ fontSize: '0.65rem' }}>Sample Data</span>
-                </div>
-              )}
               <div className="table-responsive">
                 <table className="deck-table">
                   <thead>
@@ -362,10 +322,24 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 </table>
               </div>
 
-              <div className="table-footnote">
-                <span className="footnote-alert">CRITICAL CML:</span>
-                <span>Minimum measured wall thickness is {minActual.toFixed(2)} mm.</span>
-              </div>
+              {(() => {
+                const governingRow = displayRows.find(r => r.actual_mm === minActual);
+                const minReqThreshold = (activeDoc as any)?.evidence?.minimum_required_thickness_mm ?? 9.0;
+                const isPassing = minActual >= minReqThreshold;
+                return (
+                  <div className="table-footnote">
+                    <div className="footnote-left">
+                      <span className="footnote-tag">GOVERNING CML:</span>
+                      <span className="footnote-cml-info">
+                        {governingRow ? `${governingRow.cml_tag} / ${governingRow.location_desc}` : 'Governing Point'} — {minActual.toFixed(2)} mm
+                      </span>
+                    </div>
+                    <span className={`footnote-assessment ${isPassing ? 'assessment-pass' : 'assessment-alert'}`}>
+                      {isPassing ? 'PASS / CONTINUE SERVICE' : 'RETIRE FROM SERVICE'}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
@@ -383,13 +357,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           }
 
           const ev = (activeDoc as any).evidence;
-          const isApprovedDemo = isApprovedDemoPreset(activeDoc);
 
-          const eqTag = ev?.equipment_id || (isApprovedDemo ? 'C-101' : 'UNAVAILABLE');
-          const nomThick = ev?.nominal_thickness_mm != null ? `${ev.nominal_thickness_mm.toFixed(2)} mm` : (isApprovedDemo ? '12.00 mm' : 'UNAVAILABLE');
-          const curThick = ev?.current_thickness_mm != null ? `${ev.current_thickness_mm.toFixed(2)} mm` : (isApprovedDemo ? '10.10 mm' : 'UNAVAILABLE');
-          const minThick = ev?.minimum_required_thickness_mm != null ? `${ev.minimum_required_thickness_mm.toFixed(2)} mm` : (isApprovedDemo ? '8.00 mm' : 'UNAVAILABLE');
-          const elapsed = ev?.elapsed_time_years != null ? `${ev.elapsed_time_years} Years` : (isApprovedDemo ? '5.00 Years' : 'UNAVAILABLE');
+          const eqTag = ev?.equipment_id || 'UNAVAILABLE';
+          const nomThick = ev?.nominal_thickness_mm != null ? `${ev.nominal_thickness_mm.toFixed(2)} mm` : 'UNAVAILABLE';
+          const curThick = ev?.current_thickness_mm != null ? `${ev.current_thickness_mm.toFixed(2)} mm` : 'UNAVAILABLE';
+          const minThick = ev?.minimum_required_thickness_mm != null ? `${ev.minimum_required_thickness_mm.toFixed(2)} mm` : 'UNAVAILABLE';
+          const elapsed = ev?.elapsed_time_years != null ? `${ev.elapsed_time_years} Years` : 'UNAVAILABLE';
 
           return (
             <div className="evidence-card params-card">
@@ -453,7 +426,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                         <span className="archive-size">{(doc.size_bytes / 1024).toFixed(1)} KB</span>
                       </div>
                       <div className="archive-hash">
-                        <CopyableMono value={doc.sha256} truncateLength={24} label="SHA-256" />
+                        <CopyableMono value={doc.sha256} truncateLength={16} label="SHA-256" />
                       </div>
                       <div className="archive-summary">{summaryText}</div>
                     </div>

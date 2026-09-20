@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useAgentTask } from '../hooks/useAgentTask';
+import { useWorkbenchSession } from '../context/WorkbenchSessionContext';
 import { useWorkbenchRuntime } from '../context/WorkbenchRuntimeContext';
 import { AgentGraphTrace } from '../components/AgentGraphTrace';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { DeliverablesPanel } from '../components/DeliverablesPanel';
-import { DocumentViewer, isApprovedDemoPreset } from '../components/DocumentViewer';
+import { DocumentViewer } from '../components/DocumentViewer';
 import { DocumentIngestionResult } from '../types/documents';
 import { GeneratedArtifact } from '../types/deliverables';
 import { systemService } from '../services/system';
@@ -27,27 +27,6 @@ import {
   FileText,
 } from 'lucide-react';
 
-const PRESET_TASKS = [
-  {
-    title: 'C-101 Column Corrosion & Remaining Life Audit (API 570)',
-    query:
-      'Execute autonomous corrosion audit on Atmospheric Distillation Column C-101 overhead line. Ingest ultrasonic thickness survey, compute deterministic metal loss and remaining service life per API 570, evaluate 12 fail-closed validation rules, and compile branded DOCX/XLSX deliverables.',
-    equipmentId: 'C-101',
-  },
-  {
-    title: 'API 570 Minimum Retirement Thickness Check',
-    query:
-      'Evaluate piping spool thickness inspection readings against retirement thickness thresholds defined in SOP-MRPL-PIP-001 Section 4.2.',
-    equipmentId: 'C-101',
-  },
-  {
-    title: 'Ultrasonic Survey (CML-4) Grid Ingestion',
-    query:
-      'Ingest ultrasonic thickness survey and extract CML-1 through CML-4 gauging grid for CDU-1 overhead condenser piping.',
-    equipmentId: 'CML-4',
-  },
-];
-
 export const WorkbenchPage: React.FC = () => {
   const {
     isRunning,
@@ -62,39 +41,50 @@ export const WorkbenchPage: React.FC = () => {
     errorMessage,
     previewRoute,
     executeTask,
-    reset,
-  } = useAgentTask();
+    resetTask: reset,
+
+    documents,
+    setDocuments,
+    selectedDoc,
+    setSelectedDoc,
+    selectedFile,
+    setSelectedFile,
+    artifacts,
+    setArtifacts,
+    taskInput,
+    setTaskInput,
+    selectedEquipmentId,
+    setSelectedEquipmentId,
+    maxSteps,
+    setMaxSteps,
+    executionMode,
+    setExecutionMode,
+    focusedColumn,
+    setFocusedColumn,
+    isTraceCollapsed,
+    setIsTraceCollapsed,
+    isPromptExpanded,
+    setIsPromptExpanded,
+
+    handleResetAll,
+  } = useWorkbenchSession();
 
   const { runtimeState, activeModel } = useWorkbenchRuntime();
 
   const toast = useToast();
-  const [taskInput, setTaskInput] = useState(PRESET_TASKS[0].query);
-  const [selectedEquipmentId, setSelectedEquipmentId] = useState(PRESET_TASKS[0].equipmentId);
-  const [maxSteps, setMaxSteps] = useState(8);
-  const [executionMode, setExecutionMode] = useState<'deterministic' | 'live'>('deterministic');
   const [configuredProvider, setConfiguredProvider] = useState<string>('Ollama');
-  const [artifacts, setArtifacts] = useState<GeneratedArtifact[]>([]);
-
-  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
-  const [focusedColumn, setFocusedColumn] = useState<'documents' | 'evidence' | 'lifecycle' | null>(null);
-  const [isTraceCollapsed, setIsTraceCollapsed] = useState(false);
   const prevRunningRef = useRef(isRunning);
 
   const handleToggleFocus = useCallback((col: 'documents' | 'evidence' | 'lifecycle') => {
     setFocusedColumn((prev) => (prev === col ? null : col));
-  }, []);
+  }, [setFocusedColumn]);
 
   const handleToggleTraceCollapse = useCallback(() => {
     setIsTraceCollapsed((prev) => !prev);
-  }, []);
+  }, [setIsTraceCollapsed]);
 
   // Strict task isolation: only render deliverables belonging to the current task_id
   const currentArtifacts = deliverables.filter((d) => !taskId || d.task_id === taskId);
-
-  // Ingested documents state
-  const [documents, setDocuments] = useState<DocumentIngestionResult[]>([]);
-  const [selectedDoc, setSelectedDoc] = useState<DocumentIngestionResult | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Dynamically load provider from tier discovery
   useEffect(() => {
@@ -123,24 +113,30 @@ export const WorkbenchPage: React.FC = () => {
 
   // Handle running task
   const handleStartTask = useCallback(async () => {
-    if (!taskInput.trim() || isRunning) return;
+    if (!taskInput.trim() && !selectedFile && !selectedDoc) {
+      toast.warning('No Document Loaded', 'Please upload an engineering document or specify an objective to begin.');
+      return;
+    }
+    if (isRunning) return;
+
+    const objective = taskInput.trim() || `Analyze uploaded document ${(selectedFile?.name || selectedDoc?.filename || 'document')} and extract engineering evidence.`;
 
     // Reset local artifacts cache before starting new task and auto-expand trace
     setArtifacts([]);
     setIsTraceCollapsed(false);
-    toast.info('Starting Task', `Executing in ${executionMode.toUpperCase()} mode...`);
-    const res = await executeTask(taskInput, maxSteps, executionMode, selectedEquipmentId, selectedFile);
+    toast.info('Starting Task', 'Executing engineering analysis pipeline...');
+    const res = await executeTask(objective, maxSteps, executionMode, selectedEquipmentId, selectedFile);
 
     if (res) {
       setIsTraceCollapsed(true);
       toast.success(
         'Task Completed',
-        '12/12 engineering invariants satisfied. Deliverables verified.'
+        'Engineering analysis executed. Deliverables and validation verified.'
       );
     } else {
       toast.error('Task Encountered Failure', 'Check execution trace for details.');
     }
-  }, [taskInput, isRunning, executionMode, selectedEquipmentId, selectedFile, executeTask, toast]);
+  }, [taskInput, isRunning, executionMode, selectedEquipmentId, selectedFile, selectedDoc, maxSteps, executeTask, toast]);
 
   // Auto-collapse Agent Trace after task completion to maximize vertical space for Deliverables Factory
   useEffect(() => {
@@ -159,9 +155,8 @@ export const WorkbenchPage: React.FC = () => {
       const isTextarea = (e.target as HTMLElement)?.tagName === 'TEXTAREA';
 
       if (e.key === 'Enter' && (!isTextarea || e.ctrlKey || e.metaKey)) {
-        if (!isRunning && taskInput.trim()) {
+        if (!isRunning && (taskInput.trim() || selectedFile || selectedDoc)) {
           e.preventDefault();
-          setIsPromptExpanded(false);
           handleStartTask();
         }
       } else if (e.key === 'Escape') {
@@ -181,25 +176,12 @@ export const WorkbenchPage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleStartTask, isRunning, taskInput, reset, toast, isPromptExpanded, focusedColumn]);
-
-  const handleSelectPreset = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const idx = Number(e.target.value);
-    const preset = PRESET_TASKS[idx];
-    if (preset) {
-      setTaskInput(preset.query);
-      setSelectedEquipmentId(preset.equipmentId);
-      setArtifacts([]);
-      reset();
-    }
-  };
+  }, [handleStartTask, isRunning, taskInput, selectedFile, selectedDoc, reset, toast, isPromptExpanded, focusedColumn]);
 
   const syncEquipmentIdFromDoc = (doc: DocumentIngestionResult) => {
     const extractedEq = (doc as any).evidence?.equipment_id;
     if (extractedEq && typeof extractedEq === 'string' && extractedEq.trim()) {
       setSelectedEquipmentId(extractedEq.trim());
-    } else if (isApprovedDemoPreset(doc)) {
-      setSelectedEquipmentId('C-101');
     } else {
       setSelectedEquipmentId('');
     }
@@ -220,33 +202,10 @@ export const WorkbenchPage: React.FC = () => {
     setSlot(document.getElementById('workbench-command-slot'));
   }, []);
 
-  const handleResetAll = useCallback(() => {
-    reset();
-    setArtifacts([]);
-    setSelectedFile(null);
-    setSelectedDoc(null);
-    setDocuments([]);
-    setSelectedEquipmentId(PRESET_TASKS[0].equipmentId);
-  }, [reset]);
+
 
   const commandBarElement = (
     <div className="unified-command-deck" role="toolbar" aria-label="Workbench Unified Command Bar">
-      <div className="cmd-preset-wrapper" title="Select Operational Goal Preset">
-        <select
-          className="cmd-preset-select"
-          onChange={handleSelectPreset}
-          disabled={isRunning}
-          defaultValue="0"
-          aria-label="Preset Engineering Scenario"
-        >
-          {PRESET_TASKS.map((preset, index) => (
-            <option key={index} value={index}>
-              {preset.title}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className="cmd-input-container">
         <input
           type="text"
@@ -254,7 +213,7 @@ export const WorkbenchPage: React.FC = () => {
           value={taskInput}
           onChange={(e) => setTaskInput(e.target.value)}
           disabled={isRunning}
-          placeholder="Refinery objective or inspection query... (↵ Execute, Click ⤢ to expand)"
+          placeholder="Enter engineering objective or upload inspection document to begin... (↵ Execute, Click ⤢ to expand)"
           aria-label="Operational Goal or Inspection Query"
         />
 
@@ -338,28 +297,6 @@ export const WorkbenchPage: React.FC = () => {
         )}
       </div>
 
-      <div
-        className="cmd-mode-pill"
-        title={`Mode: ${executionMode === 'live' ? 'Live Local Model (FastAPI + Ollama)' : 'Deterministic Demonstration Pipeline'}`}
-      >
-        <button
-          type="button"
-          className={`cmd-mode-btn ${executionMode === 'deterministic' ? 'is-active' : ''}`}
-          onClick={() => setExecutionMode('deterministic')}
-          disabled={isRunning}
-        >
-          DEMO
-        </button>
-        <button
-          type="button"
-          className={`cmd-mode-btn ${executionMode === 'live' ? 'is-active' : ''}`}
-          onClick={() => setExecutionMode('live')}
-          disabled={isRunning}
-        >
-          LIVE
-        </button>
-      </div>
-
       <div className="cmd-steps-wrap" title="Max Agent Exploration Steps">
         <select
           className="cmd-steps-select"
@@ -389,7 +326,7 @@ export const WorkbenchPage: React.FC = () => {
         type="button"
         className={`cmd-btn-execute ${isRunning ? 'is-running' : ''}`}
         onClick={handleStartTask}
-        disabled={isRunning || !taskInput.trim()}
+        disabled={isRunning || (!taskInput.trim() && !selectedFile && !selectedDoc)}
         aria-label={isRunning ? 'Executing Pipeline...' : 'Execute Analysis'}
       >
         {isRunning ? (
@@ -438,6 +375,14 @@ export const WorkbenchPage: React.FC = () => {
                 setSelectedFile(file);
               }
               syncEquipmentIdFromDoc(doc);
+              if (!taskInput.trim()) {
+                const eq = (doc as any).evidence?.equipment_id;
+                setTaskInput(
+                  eq
+                    ? `Execute autonomous corrosion audit and remaining life assessment on ${eq}.`
+                    : `Analyze uploaded engineering document ${doc.filename} and extract engineering evidence.`
+                );
+              }
               toast.success('Document Uploaded', `Ingested ${doc.filename} (${doc.sha256.substring(0, 12)}...)`);
             }}
             isFocused={focusedColumn === 'documents'}
@@ -480,7 +425,7 @@ export const WorkbenchPage: React.FC = () => {
             taskId={taskId}
             executionCapability={runtimeState.executionCapability}
             activeModel={activeModel}
-            sourceDocument={selectedDoc?.filename || selectedFile?.name || runtimeState.sourceDocument || 'pid_sample.png'}
+            sourceDocument={selectedDoc?.filename || selectedFile?.name || runtimeState.sourceDocument || ''}
             visualFindingsCount={
               typeof result?.summary === 'object' && (result.summary as any)?.findings_count !== undefined
                 ? (result.summary as any).findings_count

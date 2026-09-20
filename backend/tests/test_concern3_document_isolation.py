@@ -70,22 +70,27 @@ def test_non_demo_document_with_real_measurements_no_c101_fabrication():
     assert norm_doc is not None
 
     extractor = EngineeringEvidenceExtractor()
-    ev = extractor.extract(norm_doc=norm_doc, is_demo_preset=False)
+    ev = extractor.extract(norm_doc=norm_doc)
 
     assert ev.equipment_id == "P-201"
     assert ev.nominal_thickness_mm == 16.0
     assert ev.minimum_required_thickness_mm == 9.5
     assert ev.current_thickness_mm == 12.8
     assert len(ev.measurements) == 2
-    # Verify C-101 constants are NOT fabricated
+    # Verify C-101 synthetic constants are NOT fabricated into this document's evidence
     assert ev.nominal_thickness_mm != 12.0
     assert ev.current_thickness_mm != 10.1
     assert ev.minimum_required_thickness_mm != 8.0
+    # elapsed_time_source must come from real document evidence (date fields),
+    # or be absent (None / sentinel 'NONE') — never from a synthetic preset string.
     assert ev.elapsed_time_source != "DEMO_PRESET"
+    # 'NONE' is the engine sentinel meaning "dates not found in document" — that is valid.
+    if ev.elapsed_time_source not in (None, "NONE"):
+        assert ev.elapsed_time_source in ("document_dates", "inspection_dates", "csv_date_columns", "date_fields")
 
 
 def test_non_demo_document_no_measurements():
-    """Verify non-demo document without measurements returns empty measurements without C-101 fallback."""
+    """Verify document without measurements returns empty measurements without fallback."""
     txt_bytes = b"General refinery maintenance guidelines for CDU unit."
     svc = IngestionService()
     res = svc.ingest_file(content=txt_bytes, filename="general_memo.csv")
@@ -93,7 +98,7 @@ def test_non_demo_document_no_measurements():
     assert norm_doc is not None
 
     extractor = EngineeringEvidenceExtractor()
-    ev = extractor.extract(norm_doc=norm_doc, is_demo_preset=False)
+    ev = extractor.extract(norm_doc=norm_doc)
 
     assert ev.measurements == []
     assert ev.nominal_thickness_mm is None
@@ -104,7 +109,7 @@ def test_non_demo_document_no_measurements():
 
 
 def test_non_demo_document_missing_equipment_id():
-    """Verify non-demo document with no equipment ID keeps equipment_id as None."""
+    """Verify document with no equipment ID keeps equipment_id as None."""
     csv_bytes = (
         b"Point,Actual_mm\n"
         b"PT-1,9.8\n"
@@ -115,35 +120,34 @@ def test_non_demo_document_missing_equipment_id():
     assert norm_doc is not None
 
     extractor = EngineeringEvidenceExtractor()
-    ev = extractor.extract(norm_doc=norm_doc, is_demo_preset=False)
+    ev = extractor.extract(norm_doc=norm_doc)
 
     assert ev.equipment_id is None
     assert ev.equipment_id != "C-101"
 
 
 @pytest.mark.asyncio
-async def test_explicit_demo_preset_preserves_c101_workflow(workflow: CorrosionAuditWorkflow):
-    """Verify explicit demo preset request (is_demo_preset=True) loads C-101 cleanly."""
+async def test_fixture_document_executes_workflow(workflow: CorrosionAuditWorkflow):
+    """Verify request with fixture document loads and executes cleanly."""
     req = CorrosionAuditWorkflowRequest(
-        objective="Run demo C-101 audit",
-        is_demo_preset=True,
+        objective="Run P-201 audit",
+        document_filename="P-201_UT_Wall_Survey_2026.csv",
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
     )
     res = await workflow.run(request=req)
     assert res.status == WorkflowStatus.COMPLETED
     assert res.calculation_result is not None
     assert res.evidence_summary is not None
-    assert res.evidence_summary["equipment_id"] == "C-101"
+    assert res.evidence_summary["equipment_id"] == "P-201"
 
 
 @pytest.mark.asyncio
-async def test_non_demo_without_document_fails_closed(workflow: CorrosionAuditWorkflow):
-    """Verify non-demo request without uploaded document fails closed without fabricating C-101."""
+async def test_without_document_fails_closed(workflow: CorrosionAuditWorkflow):
+    """Verify request without uploaded document fails closed without fabricating equipment."""
     req = CorrosionAuditWorkflowRequest(
-        objective="Run non-demo audit without document",
-        is_demo_preset=False,
+        objective="Run audit without document",
         execution_mode=WorkflowExecutionMode.DETERMINISTIC,
     )
     res = await workflow.run(request=req)
     assert res.status == WorkflowStatus.FAILED
-    assert any("No document uploaded and is_demo_preset is False" in err for err in res.errors)
+    assert any("Document input required: No document uploaded" in err for err in res.errors)

@@ -97,7 +97,6 @@ export interface OcrVisionSummary {
   summary?: string;
   model_used?: string;
   provider?: string;
-  is_demo_fixture?: boolean;
   reason?: string;
 }
 

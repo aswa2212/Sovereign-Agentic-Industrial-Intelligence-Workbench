@@ -103,43 +103,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       perform: () => { navigate('/sovereignty'); onClose(); },
     },
 
-    // Workbench Presets
-    {
-      id: 'preset-c101',
-      title: 'Preset: C-101 Column Corrosion Audit (API 570)',
-      category: 'Presets',
-      icon: Play,
-      hint: 'North-Star Scenario',
-      perform: () => {
-        navigate('/workbench');
-        if (onSelectPreset) onSelectPreset('C-101 Overhead Column Corrosion Audit');
-        onClose();
-      },
-    },
-    {
-      id: 'preset-thickness',
-      title: 'Preset: API 570 Minimum Retirement Thickness',
-      category: 'Presets',
-      icon: Play,
-      hint: 'Formula Verification',
-      perform: () => {
-        navigate('/workbench');
-        if (onSelectPreset) onSelectPreset('Verify API 570 Retirement Thickness Formula on Carbon Steel');
-        onClose();
-      },
-    },
-    {
-      id: 'preset-ndt',
-      title: 'Preset: Ingest Ultrasonic Survey Data (CML-4)',
-      category: 'Presets',
-      icon: Play,
-      hint: 'NDT Ingestion',
-      perform: () => {
-        navigate('/workbench');
-        if (onSelectPreset) onSelectPreset('Ingest ultrasonic thickness survey and extract CML grid');
-        onClose();
-      },
-    },
+
 
     // Quick Actions
     {

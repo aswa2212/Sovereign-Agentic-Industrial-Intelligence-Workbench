@@ -47,8 +47,7 @@ export const agentService = {
     objective: string,
     mode: 'deterministic' | 'live' = 'deterministic',
     componentId?: string | null,
-    file?: File | null,
-    isDemo?: boolean
+    file?: File | null
   ): Promise<any> {
     const formData = new FormData();
     formData.append('objective', objective);
@@ -58,10 +57,6 @@ export const agentService = {
     }
     if (file) {
       formData.append('file', file, file.name);
-    }
-    const demoFlag = isDemo !== undefined ? isDemo : (!file);
-    if (demoFlag) {
-      formData.append('is_demo', 'true');
     }
     return request<any>('/workflows/corrosion-audit', {
       method: 'POST',
