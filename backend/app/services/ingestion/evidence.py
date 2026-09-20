@@ -16,12 +16,30 @@ try:
         NormalizedDocument,
         ParsedTable,
     )
+    from app.services.vision.base import (
+        BoundingBox,
+        SchematicAnalysisResult,
+        VisualFinding,
+        VisualFindingType,
+    )
 except ImportError:
     from backend.app.services.ingestion.models import (
         DocumentProvenance,
         NormalizedDocument,
         ParsedTable,
     )
+    try:
+        from backend.app.services.vision.base import (
+            BoundingBox,
+            SchematicAnalysisResult,
+            VisualFinding,
+            VisualFindingType,
+        )
+    except ImportError:
+        BoundingBox = Any  # type: ignore
+        SchematicAnalysisResult = Any  # type: ignore
+        VisualFinding = Any  # type: ignore
+        VisualFindingType = Any  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +102,57 @@ DATE_ALIASES = [
     "date_measured",
     "reading_date",
     "year",
+]
+
+# ── Vision Thickness Extraction Patterns & Rules (Phase 2) ───────────────────
+
+UNCERTAINTY_INDICATORS = (
+    "~",
+    "??",
+    "?",
+    "approx",
+    "estimated",
+    "unclear",
+    "unreadable",
+    "ambiguous",
+    "uncertain",
+    "rough",
+)
+
+_ACTUAL_THICKNESS_PATTERNS = [
+    # "Actual thickness: 12.8 mm", "Measured wall thickness = 10.5 mm", "UT reading: 11.2 mm", "Current thickness: 8.5 mm"
+    re.compile(
+        r"(?:actual|measured|current|ut\s+reading|utg\s+reading|utg|wall)\s*(?:wall\s+)?(?:thickness|reading)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mm\b",
+        re.IGNORECASE,
+    ),
+    # "t_actual = 12.8 mm", "t_act: 12.8 mm", "t_meas: 12.8 mm"
+    re.compile(
+        r"\b(?:t_actual|t_act|t_meas|t_current|t_curr)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mm\b",
+        re.IGNORECASE,
+    ),
+    # "12.8 mm actual thickness", "10.5 mm measured wall thickness"
+    re.compile(
+        r"\b(\d+(?:\.\d+)?)\s*mm\s+(?:actual|measured|current)\s*(?:wall\s+)?thickness\b",
+        re.IGNORECASE,
+    ),
+]
+
+_NOMINAL_THICKNESS_PATTERNS = [
+    # "Nominal thickness: 15.0 mm", "Design thickness = 14.0 mm", "Baseline thickness: 12.7 mm"
+    re.compile(
+        r"(?:nominal|baseline|design|initial)\s*(?:wall\s+)?(?:thickness)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mm\b",
+        re.IGNORECASE,
+    ),
+    # "t_nominal = 15.0 mm", "t_nom: 15.0 mm", "t_design: 14.0 mm"
+    re.compile(
+        r"\b(?:t_nominal|t_nom|t_design|t_des|t_initial|t_base)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mm\b",
+        re.IGNORECASE,
+    ),
+    # "15.0 mm nominal thickness"
+    re.compile(
+        r"\b(\d+(?:\.\d+)?)\s*mm\s+(?:nominal|baseline|design)\s*(?:wall\s+)?thickness\b",
+        re.IGNORECASE,
+    ),
 ]
 
 
@@ -390,6 +459,351 @@ class EngineeringEvidenceExtractor:
         )
 
         return evidence
+
+    def extract_from_vision(
+        self,
+        vlm_res: Any,
+        existing_evidence: Optional[EngineeringEvidence] = None,
+        user_component_id: Optional[str] = None,
+        user_elapsed_years: Optional[float] = None,
+        user_min_thickness: Optional[float] = None,
+    ) -> EngineeringEvidence:
+        """
+        Phase 2 — Vision-to-Measurement Bridge:
+        Converts SchematicAnalysisResult from VisionEngine into structured,
+        provenance-aware EngineeringEvidence.
+        Strictly distinguishes visual findings from engineering measurements.
+        Never infers, derives, or fabricates numerical wall thickness.
+        """
+        if existing_evidence is not None:
+            evidence = existing_evidence.model_copy(deep=True)
+        else:
+            prov = getattr(vlm_res, "provenance", None)
+            evidence = EngineeringEvidence(
+                source_filename=prov.source_filename if prov else "unknown_image",
+                source_sha256=prov.source_sha256 if prov else "unknown_sha256",
+                source_page=None,
+                extraction_method="vision_vlm",
+            )
+
+        # Ensure image provenance never manufactures a fake page number
+        evidence.source_page = None
+
+        # ── 1. Equipment Tag Resolution & Precedence (Section 7) ─────────────
+        # 1. Explicit user component ID
+        if user_component_id and user_component_id.strip():
+            clean_user = user_component_id.strip().upper()
+            evidence.equipment_id = clean_user
+            evidence.equipment_id_source = "USER"
+        # 2. Existing authoritative document-derived component ID
+        elif evidence.equipment_id and evidence.equipment_id_source in (
+            "DOCUMENT_TABLE", "DOCUMENT_BODY", "DOCUMENT_METADATA"
+        ):
+            pass  # Retain existing authoritative document-derived ID
+        # 3. High-confidence VLM equipment tag
+        else:
+            vlm_tag = None
+            if vlm_res and getattr(vlm_res, "equipment_tags", None):
+                for tag in vlm_res.equipment_tags:
+                    if tag and isinstance(tag, str) and tag.strip():
+                        c_tag = tag.strip().upper()
+                        if c_tag not in ("UNKNOWN", "UNTAGGED", "SOP", "API", "MRPL"):
+                            vlm_tag = c_tag
+                            break
+            if not vlm_tag and vlm_res and getattr(vlm_res, "findings", None):
+                for f in vlm_res.findings:
+                    f_type = getattr(f, "finding_type", None)
+                    f_type_str = f_type.value if hasattr(f_type, "value") else str(f_type)
+                    if f_type_str == "equipment_tag" and float(getattr(f, "confidence", 0.0)) >= 0.70:
+                        lbl = getattr(f, "label", "") or getattr(f, "text", "")
+                        if lbl and lbl.strip():
+                            c_lbl = lbl.strip().upper()
+                            if c_lbl not in ("UNKNOWN", "UNTAGGED", "SOP", "API", "MRPL"):
+                                vlm_tag = c_lbl
+                                break
+            if vlm_tag:
+                evidence.equipment_id = vlm_tag
+                evidence.equipment_id_source = "VISION"
+            elif not evidence.equipment_id or evidence.equipment_id_source == "UNKNOWN":
+                evidence.equipment_id = None
+                evidence.equipment_id_source = "UNKNOWN"
+
+        # ── 2. Strict Measurement Extraction (Section 4 & 5) ─────────────────
+        extracted_measurements: List[ExtractedMeasurement] = []
+        found_nominal: Optional[float] = None
+
+        findings = getattr(vlm_res, "findings", []) or []
+        for f in findings:
+            conf = float(getattr(f, "confidence", 1.0))
+            # Uncertainty rule: reject if confidence < 0.70
+            if conf < 0.70:
+                continue
+
+            nom_val, act_val = self._extract_thickness_from_finding(f)
+
+            if nom_val is not None and found_nominal is None:
+                found_nominal = nom_val
+
+            if act_val is not None and act_val > 0:
+                f_prov = getattr(f, "provenance", None)
+                f_bbox = getattr(f, "bounding_box", None)
+                coords = None
+                if f_bbox is not None:
+                    raw_coords = (
+                        f_bbox.model_dump()
+                        if hasattr(f_bbox, "model_dump")
+                        else (f_bbox if isinstance(f_bbox, dict) else None)
+                    )
+                    if isinstance(raw_coords, dict):
+                        coords = {k: v for k, v in raw_coords.items() if v is not None}
+
+                prov = DocumentProvenance(
+                    source_filename=(
+                        f_prov.source_filename
+                        if (f_prov and f_prov.source_filename)
+                        else evidence.source_filename
+                    ),
+                    source_sha256=(
+                        f_prov.source_sha256
+                        if (f_prov and f_prov.source_sha256)
+                        else evidence.source_sha256
+                    ),
+                    page_number=None,  # Strictly None for images
+                    coordinates=coords,
+                )
+
+                lbl = getattr(f, "label", "")
+                cml_tag = (
+                    lbl
+                    if (lbl and lbl not in ("UNTAGGED", "unknown", ""))
+                    else f"{evidence.equipment_id or 'EQUIP'}-VIS-{len(extracted_measurements)+1}"
+                )
+                loc_desc = (
+                    getattr(f, "evidence", "")
+                    or getattr(f, "text", "")
+                    or "Vision-extracted thickness measurement"
+                )
+
+                loss = round(nom_val - act_val, 4) if nom_val is not None else None
+
+                measurement = ExtractedMeasurement(
+                    cml_tag=cml_tag,
+                    location_desc=loc_desc,
+                    nominal_thickness_mm=nom_val,
+                    measured_thickness_mm=act_val,
+                    loss_mm=loss,
+                    measurement_date=None,
+                    source_page=None,
+                    provenance=prov,
+                )
+                extracted_measurements.append(measurement)
+
+        # ── 3. Populate Measurements into EngineeringEvidence ────────────────
+        if extracted_measurements:
+            evidence.measurements = extracted_measurements
+            # Select critical minimum measurement deterministically
+            selected = min(extracted_measurements, key=lambda m: m.measured_thickness_mm)
+            if selected.nominal_thickness_mm is None and found_nominal is not None:
+                selected.nominal_thickness_mm = found_nominal
+                selected.loss_mm = round(found_nominal - selected.measured_thickness_mm, 4)
+            evidence.selected_measurement = selected
+            evidence.current_thickness_mm = selected.measured_thickness_mm
+            evidence.current_thickness_source = "VISION"
+            evidence.source_page = None
+            evidence.extraction_method = "vision_vlm"
+
+            if found_nominal is not None:
+                evidence.nominal_thickness_mm = found_nominal
+                evidence.nominal_thickness_source = "VISION"
+            elif selected.nominal_thickness_mm is not None:
+                evidence.nominal_thickness_mm = selected.nominal_thickness_mm
+                evidence.nominal_thickness_source = "VISION"
+        else:
+            # Check summary text as fallback ONLY if explicit and unambiguous
+            sum_text = getattr(vlm_res, "summary", "")
+            sum_nom, sum_act = self._parse_thickness_from_text(sum_text) if sum_text else (None, None)
+            if sum_act is not None and sum_act > 0:
+                prov = DocumentProvenance(
+                    source_filename=evidence.source_filename,
+                    source_sha256=evidence.source_sha256,
+                    page_number=None,
+                )
+                meas = ExtractedMeasurement(
+                    cml_tag=f"{evidence.equipment_id or 'EQUIP'}-VIS-1",
+                    location_desc="Extracted from vision summary text",
+                    nominal_thickness_mm=sum_nom,
+                    measured_thickness_mm=sum_act,
+                    provenance=prov,
+                    source_page=None,
+                )
+                evidence.measurements = [meas]
+                evidence.selected_measurement = meas
+                evidence.current_thickness_mm = sum_act
+                evidence.current_thickness_source = "VISION"
+                if sum_nom is not None:
+                    evidence.nominal_thickness_mm = sum_nom
+                    evidence.nominal_thickness_source = "VISION"
+                evidence.source_page = None
+                evidence.extraction_method = "vision_vlm"
+            elif not evidence.measurements:
+                # Genuine thickness NOT present: do NOT fabricate or invent
+                evidence.current_thickness_mm = None
+                evidence.current_thickness_source = "NONE"
+                evidence.selected_measurement = None
+                if found_nominal is not None:
+                    evidence.nominal_thickness_mm = found_nominal
+                    evidence.nominal_thickness_source = "VISION"
+                elif evidence.nominal_thickness_source in ("NONE", "UNKNOWN"):
+                    evidence.nominal_thickness_mm = None
+                    evidence.nominal_thickness_source = "NONE"
+
+        # ── 4. Elapsed Time Determination (Precedence) ───────────────────────
+        if user_elapsed_years is not None and user_elapsed_years > 0:
+            evidence.elapsed_time_years = float(user_elapsed_years)
+            evidence.elapsed_time_source = "USER"
+        elif evidence.elapsed_time_years is None:
+            evidence.elapsed_time_years = None
+            evidence.elapsed_time_source = "NONE"
+
+        # ── 5. Minimum Required Thickness Determination (Precedence) ─────────
+        if user_min_thickness is not None and user_min_thickness > 0:
+            evidence.minimum_required_thickness_mm = float(user_min_thickness)
+            evidence.minimum_thickness_source = "USER"
+        elif evidence.minimum_required_thickness_mm is None:
+            evidence.minimum_required_thickness_mm = None
+            evidence.minimum_thickness_source = "NONE"
+
+        # ── 6. Inspection Subject Description ────────────────────────────────
+        if evidence.selected_measurement and evidence.selected_measurement.location_desc:
+            evidence.inspection_subject = (
+                f"{evidence.equipment_id or 'Equipment'} {evidence.selected_measurement.location_desc}"
+            )
+        else:
+            evidence.inspection_subject = f"Equipment {evidence.equipment_id or 'Inspection'} Visual Survey"
+
+        # ── 7. Evidence Sufficiency Evaluation (Section 8) ───────────────────
+        missing = []
+        if evidence.nominal_thickness_mm is None:
+            missing.append("nominal_thickness_mm")
+        if evidence.current_thickness_mm is None:
+            missing.append("current_thickness_mm")
+        if evidence.elapsed_time_years is None:
+            missing.append("elapsed_time_years")
+
+        evidence.missing_fields = missing
+        evidence.can_calculate_corrosion_rate = len(missing) == 0
+
+        evidence.can_calculate_remaining_life = (
+            evidence.can_calculate_corrosion_rate
+            and evidence.minimum_required_thickness_mm is not None
+        )
+
+        return evidence
+
+    def _extract_thickness_from_finding(
+        self, finding: Any
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Extract (nominal_thickness_mm, measured_thickness_mm) from a VisualFinding.
+        Returns (None, None) if not explicitly present or if uncertainty indicators exist.
+        """
+        # 1. Check structured attributes
+        attrs = getattr(finding, "attributes", {}) or {}
+        if isinstance(attrs, dict):
+            nom_attr = _parse_float(
+                attrs.get("nominal_thickness_mm")
+                or attrs.get("nominal_thickness")
+                or attrs.get("nominal")
+            )
+            act_attr = _parse_float(
+                attrs.get("measured_thickness_mm")
+                or attrs.get("actual_thickness_mm")
+                or attrs.get("current_thickness_mm")
+                or attrs.get("measured")
+                or attrs.get("actual")
+            )
+            if nom_attr is not None or act_attr is not None:
+                return nom_attr, act_attr
+
+        # 2. Check textual representations in finding
+        texts_to_check = [
+            str(getattr(finding, "text", "") or ""),
+            str(getattr(finding, "evidence", "") or ""),
+            str(getattr(finding, "label", "") or ""),
+        ]
+
+        found_nom = None
+        found_act = None
+
+        for t in texts_to_check:
+            if not t or not t.strip():
+                continue
+            if self._is_uncertain_text(t):
+                continue
+            nom, act = self._parse_thickness_from_text(t)
+            if nom is not None and found_nom is None:
+                found_nom = nom
+            if act is not None and found_act is None:
+                found_act = act
+
+        return found_nom, found_act
+
+    @staticmethod
+    def _is_uncertain_text(text: str) -> bool:
+        """Return True if text contains markers of ambiguity or uncertainty."""
+        if not text:
+            return False
+        t_low = text.lower()
+        if any(m in t_low for m in UNCERTAINTY_INDICATORS):
+            return True
+        return False
+
+    @classmethod
+    def _parse_thickness_from_text(
+        cls, text: str
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Parse nominal and actual/measured thickness from a text snippet.
+        Strictly requires explicit 'mm' unit and thickness-specific phrasing.
+        Rejects flange sizes, pipe diameters, motor ratings, pressure gauges, and ambiguous values.
+        """
+        if not text:
+            return None, None
+
+        # Uncertainty rule
+        if cls._is_uncertain_text(text):
+            return None, None
+
+        nom = None
+        act = None
+
+        # 1. Parse nominal thickness
+        for pat in _NOMINAL_THICKNESS_PATTERNS:
+            m = pat.search(text)
+            if m:
+                # Ensure the match is not describing a diameter or pipe size
+                start, end = m.span()
+                matched_str = text[start:end].lower()
+                if not any(d in matched_str for d in ("diameter", "dia", "flange", "bore")):
+                    val = _parse_float(m.group(1))
+                    if val is not None and val > 0:
+                        nom = val
+                        break
+
+        # 2. Parse actual / measured thickness
+        for pat in _ACTUAL_THICKNESS_PATTERNS:
+            m = pat.search(text)
+            if m:
+                # Ensure the match is not describing a diameter, flange, or pressure
+                start, end = m.span()
+                matched_str = text[start:end].lower()
+                if not any(d in matched_str for d in ("diameter", "dia", "flange", "bore")):
+                    val = _parse_float(m.group(1))
+                    if val is not None and val > 0:
+                        act = val
+                        break
+
+        return nom, act
 
     def _extract_from_table(
         self, table: ParsedTable, norm_doc: NormalizedDocument

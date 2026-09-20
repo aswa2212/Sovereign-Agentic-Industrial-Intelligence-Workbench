@@ -271,6 +271,7 @@ class CorrosionAuditWorkflow:
                 started_at=utc_now_iso(),
             )
 
+            vlm_res: Optional[Any] = None
             try:
                 import io
                 from PIL import Image
@@ -361,20 +362,112 @@ class CorrosionAuditWorkflow:
                         }
                         st_vision.status = StageStatus.SKIPPED
                 else:
-                    img = Image.new("RGB", (300, 150), color=(255, 255, 255))
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    img_bytes = buf.getvalue()
+                    # DETERMINISTIC mode — use actual uploaded image bytes when available.
+                    # A blank/synthetic image is NEVER substituted for a real upload.
+                    # Difference from LIVE mode: vision failures degrade gracefully here
+                    # instead of failing hard, preserving the existing mode semantics.
+                    _file_is_img = bool(
+                        raw_pdf and any(
+                            filename.lower().endswith(ext)
+                            for ext in (".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp")
+                        )
+                    )
 
-                    ocr_res = await self.ocr_engine.extract_from_image(img_bytes, provenance=prov)
-                    ocr_summary = {
-                        "engine_name": ocr_res.engine_name,
-                        "total_tokens": len(ocr_res.tokens),
-                        "confidence_avg": round(ocr_res.mean_confidence, 3),
-                        "status": ocr_res.status,
-                        "degraded": False,
-                    }
-                    st_vision.status = StageStatus.SUCCESS
+                    if _file_is_img:
+                        img_bytes = raw_pdf  # preserve actual uploaded bytes; no substitution
+                        try:
+                            # Route through existing VisionEngine abstraction:
+                            # ModelManagerVisionProvider → ModelManager.generate_structured(
+                            #     role="vision") → qwen2.5vl:3b (resolved by tier config)
+                            _vision_entry = self.model_manager.get_tier_config().get_model("vision")
+                            _vision_tag = _vision_entry.model_tag if _vision_entry else "vision"
+                            logger.info(
+                                "Vision inference: role=vision model=%s "
+                                "image_input=true filename=%s",
+                                _vision_tag,
+                                filename,
+                            )
+                            vlm_res = await self.vision_engine.analyze_schematic(
+                                img_bytes, provenance=prov
+                            )
+                            logger.info(
+                                "Vision inference complete: role=vision model=%s "
+                                "findings=%d image_input=true",
+                                vlm_res.model_used,
+                                len(vlm_res.findings),
+                            )
+                            ocr_summary = {
+                                "engine_name": "local_vlm",
+                                "model_used": vlm_res.model_used,
+                                "provider": "ollama",
+                                "findings_count": len(vlm_res.findings),
+                                "equipment_tags": vlm_res.equipment_tags,
+                                "instrument_tags": vlm_res.instrument_tags,
+                                "summary": vlm_res.summary,
+                                "status": vlm_res.status,
+                                "degraded": False,
+                                "image_input": True,
+                            }
+                            st_vision.status = StageStatus.SUCCESS
+                        except Exception as vlm_err:
+                            # DETERMINISTIC: degrade gracefully — log and continue.
+                            # LIVE mode (above) already hard-fails; this preserves mode semantics.
+                            logger.warning(
+                                "Vision inference failed (DETERMINISTIC mode — degrading): %s",
+                                vlm_err,
+                            )
+                            ocr_summary = {
+                                "engine_name": "local_vlm",
+                                "status": "degraded",
+                                "reason": str(vlm_err),
+                                "findings_count": 0,
+                                "equipment_tags": [],
+                                "instrument_tags": [],
+                                "image_input": True,
+                                "degraded": True,
+                            }
+                            st_vision.status = StageStatus.DEGRADED
+                    else:
+                        # Non-visual file (PDF, CSV, DOCX): check OCR engine degradation if configured
+                        if self.ocr_engine is not None:
+                            try:
+                                _probe_img = Image.new("RGB", (32, 32), color=(255, 255, 255))
+                                _pbuf = io.BytesIO()
+                                _probe_img.save(_pbuf, format="PNG")
+                                ocr_res = await self.ocr_engine.extract_from_image(_pbuf.getvalue(), provenance=prov)
+                                ocr_summary = {
+                                    "engine_name": ocr_res.engine_name,
+                                    "total_tokens": len(ocr_res.tokens),
+                                    "confidence_avg": round(ocr_res.mean_confidence, 3),
+                                    "status": ocr_res.status,
+                                    "degraded": False,
+                                    "image_input": False,
+                                }
+                                st_vision.status = StageStatus.SUCCESS
+                            except OCREngineUnavailableError as ocr_err:
+                                logger.warning("Vision/OCR operating in degraded mode: %s", str(ocr_err))
+                                ocr_summary = {
+                                    "engine_name": "none",
+                                    "total_tokens": 0,
+                                    "confidence_avg": 0.0,
+                                    "degraded": True,
+                                    "reason": str(ocr_err),
+                                }
+                                st_vision.status = StageStatus.DEGRADED
+                        else:
+                            _suffix = Path(filename).suffix if filename else "none"
+                            ocr_summary = {
+                                "engine_name": "none",
+                                "status": StageStatus.SKIPPED.value,
+                                "reason": (
+                                    f"No image file uploaded "
+                                    f"(type: {_suffix}). Vision stage skipped."
+                                ),
+                                "findings_count": 0,
+                                "degraded": False,
+                                "image_input": False,
+                            }
+                            st_vision.status = StageStatus.SKIPPED
             except IntegrationError:
                 st_vision.status = StageStatus.FAILED
                 raise
@@ -401,6 +494,18 @@ class CorrosionAuditWorkflow:
             st_vision.details = ocr_summary
             stages_telemetry.append(st_vision)
 
+            # Phase 2 — Qwen-VL Vision -> Structured Engineering Evidence
+            if vlm_res is not None and st_vision.status == StageStatus.SUCCESS:
+                evidence_obj = self.evidence_extractor.extract_from_vision(
+                    vlm_res=vlm_res,
+                    existing_evidence=evidence_obj,
+                    user_component_id=request.component_id,
+                    user_elapsed_years=request.elapsed_time_years,
+                    user_min_thickness=request.minimum_required_thickness_mm,
+                )
+                evidence_dict = evidence_obj.model_dump()
+                doc_summary["evidence"] = evidence_dict
+
             # ── 3. Task Router Intent Classification ──────────────────────────
             t_stage_start = time.monotonic()
             st_router = WorkflowStageTelemetry(
@@ -410,7 +515,26 @@ class CorrosionAuditWorkflow:
                 started_at=utc_now_iso(),
             )
 
-            route_decision = self.router.route(task=request.objective, request_id=task_id)
+            # Phase-1 image bridge: inform the router when an image file was uploaded
+            # so it can force ModelRole.VISION without relying on objective text keywords.
+            _IMAGE_EXTS = frozenset({
+                ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"
+            })
+            _file_is_image = bool(
+                filename and Path(filename).suffix.lower() in _IMAGE_EXTS
+            )
+            _routing_context = {"has_image": True} if _file_is_image else None
+            if _file_is_image:
+                logger.info(
+                    "Workflow: image file detected (%s) → passing has_image=True to router",
+                    filename,
+                )
+
+            route_decision = self.router.route(
+                task=request.objective,
+                context=_routing_context,
+                request_id=task_id,
+            )
             routing_decision_dict = {
                 "task_type": route_decision.task_type.value,
                 "model_role": route_decision.model_role.value,
@@ -538,47 +662,294 @@ class CorrosionAuditWorkflow:
                     "capability": "vision",
                 }
 
-                # ── 7. Sandboxed Calculation (SKIPPED - do NOT run corrosion calc)
-                st_sandbox = WorkflowStageTelemetry(
-                    stage_name="sandboxed_calculation",
-                    stage_index=6,
-                    status=StageStatus.SKIPPED,
-                    duration_ms=0.0,
-                    started_at=utc_now_iso(),
-                    completed_at=utc_now_iso(),
-                    details={"reason": "Corrosion rate calculations not requested for visual-only task."},
-                )
-                stages_telemetry.append(st_sandbox)
-                calc_result_dict = None
+                # ── 7. Sandboxed Engineering Calculation (Phase 3: Vision Evidence Bridge)
+                if evidence_obj and evidence_obj.can_calculate_corrosion_rate:
+                    t_stage_start = time.monotonic()
+                    st_sandbox = WorkflowStageTelemetry(
+                        stage_name="sandboxed_calculation",
+                        stage_index=6,
+                        status=StageStatus.IN_PROGRESS,
+                        started_at=utc_now_iso(),
+                    )
 
-                # ── 8. Engineering Validation Gate (SKIPPED - do NOT run validation)
-                st_validation = WorkflowStageTelemetry(
-                    stage_name="engineering_validation_gate",
-                    stage_index=7,
-                    status=StageStatus.SKIPPED,
-                    duration_ms=0.0,
-                    started_at=utc_now_iso(),
-                    completed_at=utc_now_iso(),
-                    details={"reason": "Corrosion engineering validation gate not requested for visual-only task."},
-                )
-                stages_telemetry.append(st_validation)
-                validation_result_dict = None
+                    initial_t = evidence_obj.nominal_thickness_mm
+                    current_t = evidence_obj.current_thickness_mm
+                    interval_yrs = evidence_obj.elapsed_time_years
+                    min_req_t = evidence_obj.minimum_required_thickness_mm
+                    comp_id = evidence_obj.equipment_id or request.component_id or "EQUIPMENT"
 
-                # ── 9. Deliverables Factory (SKIPPED - do NOT generate DOCX/XLSX)
-                st_deliverables = WorkflowStageTelemetry(
-                    stage_name="deliverables_factory",
-                    stage_index=8,
-                    status=StageStatus.SKIPPED,
-                    duration_ms=0.0,
-                    started_at=utc_now_iso(),
-                    completed_at=utc_now_iso(),
-                    details={
-                        "artifacts_count": 0,
-                        "reason": "Visual analysis completed. Engineering calculation and reports not requested.",
-                    },
-                )
-                stages_telemetry.append(st_deliverables)
-                deliverable_summaries = []
+                    calc_req = ToolExecutionRequest(
+                        tool_name="corrosion_rate_calc",
+                        input={
+                            "component_id": comp_id,
+                            "previous_thickness_mm": initial_t,
+                            "current_thickness_mm": current_t,
+                            "elapsed_time_years": interval_yrs,
+                            "minimum_required_mm": min_req_t,
+                        },
+                        execution_mode="subprocess",
+                    )
+                    calc_resp = await self.sandbox_executor.execute_tool(calc_req)
+
+                    if calc_resp.status != ExecutionStatus.SUCCESS or not calc_resp.structured_result:
+                        raise IntegrationError(
+                            f"Sandboxed corrosion rate calculation failed: {calc_resp.error_message}",
+                            stage="sandbox",
+                        )
+
+                    calc_result_dict = calc_resp.structured_result
+
+                    # Check minimum wall thickness margin check if threshold is present
+                    if min_req_t is not None:
+                        margin_req = ToolExecutionRequest(
+                            tool_name="minimum_wall_thickness_check",
+                            input={
+                                "component_id": comp_id,
+                                "measured_thickness_mm": current_t,
+                                "minimum_required_mm": min_req_t,
+                            },
+                            execution_mode="subprocess",
+                        )
+                        margin_resp = await self.sandbox_executor.execute_tool(margin_req)
+                        calc_result_dict["margin_check"] = margin_resp.structured_result or {}
+                    else:
+                        calc_result_dict["margin_check"] = {
+                            "status": "INSUFFICIENT_EVIDENCE",
+                            "message": "Minimum retirement thickness threshold unavailable.",
+                        }
+
+                    st_sandbox.status = StageStatus.SUCCESS
+                    st_sandbox.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                    st_sandbox.completed_at = utc_now_iso()
+                    st_sandbox.details = calc_result_dict
+                    stages_telemetry.append(st_sandbox)
+
+                    # ── 8. Engineering Validation Gate ───────────────────────
+                    t_stage_start = time.monotonic()
+                    st_validation = WorkflowStageTelemetry(
+                        stage_name="engineering_validation_gate",
+                        stage_index=7,
+                        status=StageStatus.IN_PROGRESS,
+                        started_at=utc_now_iso(),
+                    )
+
+                    corrosion_calc = CorrosionCalculation(
+                        initial_thickness_mm=initial_t,
+                        current_thickness_mm=current_t,
+                        inspection_interval_years=interval_yrs,
+                        minimum_required_mm=min_req_t,
+                        corrosion_rate_mm_per_year=calc_result_dict["corrosion_rate_mm_per_year"],
+                        remaining_life_years=calc_result_dict.get("remaining_life_years"),
+                        formula_applied="corrosion_rate = (initial - current) / interval; remaining_life = (current - min_req) / rate",
+                    )
+
+                    primary_citation = SourceCitation(
+                        source_document=evidence_obj.source_filename,
+                        page_number=evidence_obj.source_page,
+                        content_sha256=evidence_obj.source_sha256,
+                        excerpt=(
+                            f"Extracted measurement: {evidence_obj.selected_measurement.location_desc} = {current_t} mm "
+                            f"(Nominal: {initial_t} mm, Interval: {interval_yrs} yrs)"
+                            if evidence_obj.selected_measurement
+                            else f"Measured thickness: {current_t} mm"
+                        ),
+                    )
+                    all_citations = [primary_citation]
+
+                    if min_req_t is not None and calc_result_dict.get("remaining_life_years") is not None:
+                        rem_life = calc_result_dict.get("remaining_life_years")
+                        margin_mm = round(current_t - min_req_t, 2)
+                        conclusion_text = (
+                            f"Equipment wall thickness ({current_t} mm) exceeds minimum retirement limit "
+                            f"({min_req_t} mm) with a remaining margin of +{margin_mm} mm. "
+                            f"Estimated remaining service life is {rem_life} years."
+                        )
+                        rec_code = RecommendationCode.CONTINUE_SERVICE if margin_mm >= 0 else RecommendationCode.RETIRE_FROM_SERVICE
+                    else:
+                        conclusion_text = (
+                            f"Calculated corrosion rate is {calc_result_dict['corrosion_rate_mm_per_year']} mm/year "
+                            f"based on initial thickness {initial_t} mm and current measured thickness {current_t} mm "
+                            f"over {interval_yrs} years. Remaining operational life assessment is INSUFFICIENT_EVIDENCE "
+                            f"(minimum required retirement thickness threshold was not provided in evidence)."
+                        )
+                        rec_code = RecommendationCode.INSUFFICIENT_DATA
+
+                    audit_payload = CorrosionAuditResult(
+                        task_id=task_id,
+                        equipment_id=comp_id,
+                        inspection_subject=evidence_obj.inspection_subject or f"Equipment {comp_id} Ultrasonic Survey",
+                        current_measurement=WallThicknessMeasurement(
+                            value_mm=current_t,
+                            measurement_date=evidence_obj.selected_measurement.measurement_date if evidence_obj.selected_measurement else None,
+                            location_tag=evidence_obj.selected_measurement.cml_tag if evidence_obj.selected_measurement else f"{comp_id}-CRITICAL",
+                        ),
+                        initial_measurement=WallThicknessMeasurement(
+                            value_mm=initial_t,
+                            measurement_date=None,
+                            location_tag=f"{comp_id}-NOMINAL",
+                        ),
+                        minimum_required_thickness_mm=min_req_t,
+                        calculation=corrosion_calc,
+                        findings=[
+                            InspectionFinding(
+                                finding_id="F-01",
+                                description=(
+                                    f"Visual engineering analysis identified governing wall thickness of {current_t} mm at "
+                                    f"{evidence_obj.selected_measurement.location_desc if evidence_obj.selected_measurement else 'critical location'}."
+                                ),
+                                severity="MEDIUM",
+                                supporting_citation=primary_citation,
+                            )
+                        ],
+                        conclusion=conclusion_text,
+                        recommendation=rec_code,
+                        citations=all_citations,
+                        confidence=0.95,
+                    )
+
+                    val_res: ValidationResult = self.validation_service.validate(audit_payload.model_dump())
+                    validation_result_dict = {
+                        "valid": val_res.valid,
+                        "status": val_res.status,
+                        "checks_passed": val_res.checks_passed,
+                        "checks_failed": val_res.checks_failed,
+                        "warnings": val_res.warnings,
+                    }
+
+                    if not val_res.valid or val_res.status != "VALID":
+                        st_validation.status = StageStatus.FAILED
+                        st_validation.error = f"Validation gate rejected result: {', '.join(val_res.checks_failed)}"
+                        st_validation.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                        st_validation.completed_at = utc_now_iso()
+                        st_validation.details = validation_result_dict
+                        stages_telemetry.append(st_validation)
+                        overall_status = WorkflowStatus.VALIDATION_FAILED
+                        raise ValidationGateError(
+                            message=f"Fail-closed validation gate rejected deliverable generation: {val_res.checks_failed}",
+                            validation_errors=val_res.checks_failed,
+                            details=validation_result_dict,
+                        )
+
+                    st_validation.status = StageStatus.SUCCESS
+                    st_validation.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                    st_validation.completed_at = utc_now_iso()
+                    st_validation.details = validation_result_dict
+                    stages_telemetry.append(st_validation)
+
+                    # ── 9. Deterministic Office Deliverables ──────────────────
+                    if request.requested_formats:
+                        t_stage_start = time.monotonic()
+                        st_deliverables = WorkflowStageTelemetry(
+                            stage_name="deliverables_factory",
+                            stage_index=8,
+                            status=StageStatus.IN_PROGRESS,
+                            started_at=utc_now_iso(),
+                        )
+
+                        meta = ReportMetadata(
+                            title=f"Refining Equipment Corrosion Audit — {comp_id}",
+                            organization="MANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)",
+                            facility="Mangalore Refinery Complex",
+                            division="Inspection & Asset Integrity Division",
+                            prepared_by="SIH26117 Sovereign Agentic Intelligence Workbench",
+                            approved_by="Chief Inspection Engineer, MRPL",
+                        )
+
+                        deliv_res = self.deliverables_factory.generate(
+                            payload=val_res.validated_data or audit_payload,
+                            formats=request.requested_formats,
+                            metadata=meta,
+                            task_id=task_id,
+                        )
+
+                        for art in deliv_res.artifacts:
+                            deliverable_summaries.append(
+                                ArtifactSummary(
+                                    artifact_id=art.artifact_id,
+                                    format=art.format.value,
+                                    filename=art.filename,
+                                    relative_path=art.relative_path,
+                                    file_size_bytes=art.file_size_bytes,
+                                    sha256=art.sha256_hash,
+                                    download_url=f"/api/v1/deliverables/download/{art.format.value}/{art.filename}",
+                                )
+                            )
+
+                        st_deliverables.status = StageStatus.SUCCESS
+                        st_deliverables.duration_ms = round((time.monotonic() - t_stage_start) * 1000, 2)
+                        st_deliverables.completed_at = utc_now_iso()
+                        st_deliverables.details = {
+                            "artifacts_count": len(deliverable_summaries),
+                            "formats": [a.format for a in deliverable_summaries],
+                        }
+                        stages_telemetry.append(st_deliverables)
+                    else:
+                        st_deliverables = WorkflowStageTelemetry(
+                            stage_name="deliverables_factory",
+                            stage_index=8,
+                            status=StageStatus.SKIPPED,
+                            duration_ms=0.0,
+                            started_at=utc_now_iso(),
+                            completed_at=utc_now_iso(),
+                            details={
+                                "artifacts_count": 0,
+                                "reason": "Calculation completed. Deliverables not requested in request formats.",
+                            },
+                        )
+                        stages_telemetry.append(st_deliverables)
+                else:
+                    missing = (
+                        evidence_obj.missing_fields
+                        if evidence_obj and evidence_obj.missing_fields
+                        else ["nominal_thickness_mm", "current_thickness_mm", "elapsed_time_years"]
+                    )
+                    calc_details = {
+                        "status": "INSUFFICIENT_EVIDENCE",
+                        "can_calculate_corrosion_rate": False,
+                        "missing_fields": missing,
+                        "reason": f"Engineering calculation unavailable due to insufficient evidence: missing {missing}.",
+                    }
+
+                    st_sandbox = WorkflowStageTelemetry(
+                        stage_name="sandboxed_calculation",
+                        stage_index=6,
+                        status=StageStatus.SKIPPED,
+                        duration_ms=0.0,
+                        started_at=utc_now_iso(),
+                        completed_at=utc_now_iso(),
+                        details=calc_details,
+                    )
+                    stages_telemetry.append(st_sandbox)
+                    calc_result_dict = None
+
+                    # ── 8. Engineering Validation Gate (SKIPPED) ─────────────
+                    st_validation = WorkflowStageTelemetry(
+                        stage_name="engineering_validation_gate",
+                        stage_index=7,
+                        status=StageStatus.SKIPPED,
+                        duration_ms=0.0,
+                        started_at=utc_now_iso(),
+                        completed_at=utc_now_iso(),
+                        details={"reason": "Corrosion engineering validation gate skipped due to insufficient evidence for calculation."},
+                    )
+                    stages_telemetry.append(st_validation)
+                    validation_result_dict = None
+
+                    # ── 9. Deliverables Factory (SKIPPED) ────────────────────
+                    st_deliverables = WorkflowStageTelemetry(
+                        stage_name="deliverables_factory",
+                        stage_index=8,
+                        status=StageStatus.SKIPPED,
+                        duration_ms=0.0,
+                        started_at=utc_now_iso(),
+                        completed_at=utc_now_iso(),
+                        details={
+                            "artifacts_count": 0,
+                            "reason": "Visual analysis completed. Engineering calculation and reports unavailable due to insufficient evidence.",
+                        },
+                    )
+                    stages_telemetry.append(st_deliverables)
+                    deliverable_summaries = []
 
             else:
                 execution_capability = getattr(route_decision.capability, "value", str(route_decision.capability))

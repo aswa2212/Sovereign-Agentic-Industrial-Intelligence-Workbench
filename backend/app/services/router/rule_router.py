@@ -113,12 +113,18 @@ class RuleRouter(TaskRouter):
         Note: Does NOT make any network calls, LLM calls, or disk I/O.
         """
         if not task or not task.strip():
+            # Even an empty objective should route to VISION if an image is attached
+            if context and context.get("has_image"):
+                return self._image_only_decision(request_id)
             return self._empty_task_decision(request_id)
 
         text = task.strip().lower()
         candidates: List[RuleMatchEvidence] = self._evaluate_rules(text)
 
         if not candidates:
+            # No text rule matched — still honour an attached image
+            if context and context.get("has_image"):
+                return self._image_only_decision(request_id)
             return self._no_match_decision(task, request_id)
 
         # Winner = lowest priority (ascending), then highest confidence (descending)
@@ -137,7 +143,7 @@ class RuleRouter(TaskRouter):
         model_role = role_for_task(task_type)
         confidence = winner.confidence
 
-        # Fallback check
+        # Fallback check (applied before image override so image always wins)
         fallback_used = confidence < self._fallback_threshold
         if fallback_used:
             model_role = self._fallback_role
@@ -150,6 +156,29 @@ class RuleRouter(TaskRouter):
                 task_type,
                 winner.rule_id,
             )
+
+        # ── Phase-1 image bridge ─────────────────────────────────────────────
+        # When the workflow signals that an image file is attached, override the
+        # text-rule result and force VISION routing.  The router returns a *role*;
+        # the ModelManager maps vision → qwen2.5vl:3b (never hardcoded here).
+        # This override is intentionally isolated and clearly documented as a
+        # Phase-1 bridge.  Future phases may replace this with a full multi-
+        # capability routing design.
+        if context and context.get("has_image"):
+            task_type = TaskType.VISION
+            capability = Capability.VISION
+            model_role = ModelRole.VISION
+            confidence = max(confidence, 0.92)  # vision signal = high specificity
+            fallback_used = False
+            logger.info(
+                "RuleRouter: has_image=True → overriding to task_type=%s role=%s "
+                "(Phase-1 image bridge; text winner was '%s', request_id=%s)",
+                task_type.value,
+                model_role.value,
+                winner.rule_id,
+                request_id,
+            )
+        # ── end Phase-1 image bridge ─────────────────────────────────────────
 
         reason = self._format_reason(winner, fallback_used)
 
@@ -238,6 +267,33 @@ class RuleRouter(TaskRouter):
                 "No routing rule matched the task. "
                 f"Routing to fallback role '{self._fallback_role}'."
             ),
+            matched_rule_ids=[],
+            primary_rule_id=None,
+            candidates=[],
+            request_id=request_id,
+            timestamp=time.time(),
+        )
+
+    def _image_only_decision(self, request_id: Optional[str]) -> RoutingDecision:
+        """Return a VISION RoutingDecision for image-only or image-dominant requests.
+
+        Used by the Phase-1 image bridge when has_image=True is present in context
+        but either the task text is empty or no text rule matched.  The ModelManager
+        is responsible for resolving ModelRole.VISION → qwen2.5vl:3b.
+        """
+        logger.info(
+            "RuleRouter: image-only path → task_type=vision role=vision "
+            "(Phase-1 image bridge; request_id=%s)",
+            request_id,
+        )
+        return RoutingDecision(
+            task_type=TaskType.VISION,
+            capability=Capability.VISION,
+            model_role=ModelRole.VISION,
+            confidence=0.92,
+            routing_method="image_context",
+            fallback_used=False,
+            reason="Attached image detected via workflow context. Routing to vision role.",
             matched_rule_ids=[],
             primary_rule_id=None,
             candidates=[],
